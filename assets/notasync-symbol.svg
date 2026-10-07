@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 112" role="img" aria-labelledby="title">
+  <title>NotaSync</title>
+  <path fill="#201E1E" d="M18 92V20h18l46 43V20h18v72H82L36 49v43z"/>
+  <path d="M109 26h58" stroke="#FAD32B" stroke-width="18" stroke-linecap="round"/>
+  <path
+    d="M112 26c-10 0-18 8-18 18s8 18 18 18h31c10 0 18 8 18 18s-8 18-18 18H92"
+    stroke="#201E1E"
+    stroke-width="18"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <path d="M81 65 98 49" stroke="#201E1E" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="98" cy="49" r="9" fill="#FAD32B" stroke="#FFF" stroke-width="5"/>
+</svg>

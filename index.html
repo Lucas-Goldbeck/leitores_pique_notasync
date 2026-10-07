@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="Claro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#201e1e" />
+    <title>NotaSync · GCONT</title>
+    <link rel="icon" type="image/png" href="./assets/notasync-favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem('gcont:theme:v1') === 'Escuro') {
+            document.documentElement.dataset.theme = 'Escuro';
+          }
+        } catch {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Identidade NotaSync">
+        <div class="brand">
+          <img
+            class="brand-mark"
+            src="./assets/notasync-icon.png"
+            alt=""
+            aria-hidden="true"
+          />
+          <img
+            class="brand-logo"
+            src="./assets/notasync-logo-horizontal.png"
+            alt="NotaSync — Busca, monitora, armazena"
+          />
+          <p class="brand-subtitle">GCONT Gestão Contábil</p>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Menu principal">
+          <button class="side-nav-link" type="button" data-app-view="dashboard" title="Dashboard" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="3.5" width="7" height="4" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="10.5" width="7" height="10" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
+            <span>Dashboard</span>
+          </button>
+          <button class="side-nav-link" type="button" data-app-view="reader" title="Leitor XML 3.0">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 3.5h7l4 4v13h-11a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 3.8v4h4M8 12h8M8 16h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span>Leitor XML 3.0</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <button
+            class="theme-toggle"
+            id="themeToggle"
+            type="button"
+            aria-label="Alternar para tema escuro"
+            aria-pressed="false"
+          >
+            <span class="theme-icon" id="themeIcon" aria-hidden="true"></span>
+            <span class="theme-copy">
+              <span class="theme-eyebrow">Aparência</span>
+              <span class="theme-label" id="themeLabel">Tema claro</span>
+            </span>
+            <svg class="theme-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <div class="sidebar-caption">NotaSync <span aria-hidden="true">·</span> GCONT</div>
+        </div>
+      </aside>
+
+      <main class="workspace" aria-label="Leitor XML">
+        <div class="reader-mount" id="readerMount"></div>
+      </main>
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

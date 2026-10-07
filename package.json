@@ -1,0 +1,9 @@
+{
+  "name": "leitores-pique-notasync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Leitor XML 3.0 com processamento local de arquivos fiscais",
+  "scripts": {
+    "start": "node server.cjs"
+  }
+}
