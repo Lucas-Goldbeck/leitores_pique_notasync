@@ -1,43 +1,65 @@
 import { extractCteServiceSummary, extractNfeLineItems, findXmlElementsByLocalName, getXmlText } from './xml-reader30-nfe-parser.js';
 import { isXmlReader30DocumentCancelled } from './xml-reader30-summary-utils.js';
 
-const tabLabels = [
+const readerMenuItems = [
   ['nfe', 'NF-e'],
-  ['cte', 'CT-e'],
   ['nfse', 'NFS-e fiscal'],
   ['difal', 'DIFAL'],
   ['cst060', 'CST 060']
 ];
 
-const dashboardStorageKey = 'notasync:xml-reader30:dashboard:v1';
-const readerLabels = {
-  nfe: 'Leitor NF-e',
-  cte: 'Leitor CT-e',
-  nfse: 'Leitor NFS-e fiscal',
-  difal: 'Cálculo DIFAL',
-  cst060: 'Conferência CST 060'
+const nfseDefaultColumnOrder = [
+  'number', 'serviceLocation', 'issIncidence', 'issuer', 'issuerCnpj', 'taker',
+  'takerMunicipality', 'takerCnpj', 'discountValue', 'netValue', 'withheldValue',
+  'serviceValue', 'issValue', 'pisValue', 'cofinsValue', 'inssValue', 'irrfValue',
+  'csllValue', 'issuedAt', 'issRetention', 'federalRetention', 'issRate',
+  'issRetainedValue', 'actualIssRate', 'processingStatus', 'processingError'
+];
+
+const readerDefaultColumnOrders = {
+  nfe: ['check', 'number', 'status', 'issuedAt', 'issuer', 'product', 'ncm', 'cfop', 'cst', 'quantity', 'productValue', 'baseIcms', 'aliquota', 'icms', 'icmsSt', 'icmsMono', 'openXml'],
+  cte: ['number', 'status', 'issuedAt', 'issuer', 'service', 'value', 'components', 'openXml'],
+  difal: ['number', 'issuedAt', 'product', 'cst', 'base', 'rate', 'icms', 'mono', 'difal', 'status'],
+  cst060: ['issuedAt', 'number', 'item', 'issuer', 'product', 'ncm', 'cfop', 'productValue', 'discount', 'base', 'rate', 'retained', 'calculated', 'difference', 'status']
 };
 
 const state = {
-  activeView: 'dashboard',
-  sessionAnalyzed: 0,
-  dashboard: loadDashboardStore(),
-  activeTab: 'nfe',
+  activeReader: 'nfe',
   files: [],
   errors: [],
   search: { nfe: '', cte: '', nfse: '' },
   difal: null,
   cst060: null,
-  modalXml: null
+  modalXml: null,
+  selectedNfeItems: new Set(),
+  confirmedNfeItems: new Set(),
+  nfeFullscreen: false,
+  readerColumnOrders: Object.fromEntries(Object.entries(readerDefaultColumnOrders).map(([reader, columns]) => [reader, [...columns]])),
+  readerColumnDrag: null,
+  nfseTable: {
+    columnOrder: [...nfseDefaultColumnOrder],
+    hiddenColumns: new Set(),
+    sortKey: 'issuedAt',
+    sortDirection: 'desc',
+    columnMenuKey: null,
+    columnMenuAnchor: null,
+    dragKey: null
+  },
+  readerFilters: {
+    nfe: { hasSearched: false, text: '' },
+    nfse: { hasSearched: false, text: '' },
+    difal: { hasSearched: false, text: '', rate: '' },
+    cst060: { hasSearched: false, text: '', rate: '' }
+  }
 };
 
 let nextFileId = 1;
 
 export function mountXmlReader30(root) {
   if (!root) return;
-  document.querySelectorAll('[data-app-view]').forEach((button) => {
+  document.querySelectorAll('[data-reader]').forEach((button) => {
     button.addEventListener('click', () => {
-      state.activeView = button.dataset.appView;
+      state.activeReader = button.dataset.reader;
       render(root);
     });
   });
@@ -45,6 +67,14 @@ export function mountXmlReader30(root) {
   root.addEventListener('change', handleChange);
   root.addEventListener('input', handleInput);
   root.addEventListener('submit', handleSubmit);
+  root.addEventListener('dragstart', handleNfseColumnDragStart);
+  root.addEventListener('dragover', handleNfseColumnDragOver);
+  root.addEventListener('drop', handleNfseColumnDrop);
+  root.addEventListener('dragend', handleNfseColumnDragEnd);
+  root.addEventListener('dragstart', handleReaderColumnDragStart);
+  root.addEventListener('dragover', handleReaderColumnDragOver);
+  root.addEventListener('drop', handleReaderColumnDrop);
+  root.addEventListener('dragend', handleReaderColumnDragEnd);
   root.addEventListener('dragover', (event) => {
     if (event.target.closest('.upload-dropzone')) event.preventDefault();
   });
@@ -57,27 +87,33 @@ export function mountXmlReader30(root) {
 
   async function handleClick(event) {
     const button = event.target.closest('[data-action]');
-    if (!button) return;
+    if (!button) {
+      if (state.nfseTable.columnMenuKey) {
+        state.nfseTable.columnMenuKey = null;
+        render(root);
+      }
+      return;
+    }
     const action = button.dataset.action;
+    if (state.nfseTable.columnMenuKey && !button.closest('[data-nfse-column-menu-wrap]')) {
+      state.nfseTable.columnMenuKey = null;
+    }
 
-    if (action === 'go-reader') {
-      state.activeView = 'reader';
-      render(root);
-    } else if (action === 'switch-tab') {
-      state.activeTab = button.dataset.tab;
-      render(root);
-    } else if (action === 'clear-files') {
-      const removed = state.files.length;
+    if (action === 'clear-files') {
       state.files = [];
       state.errors = [];
       state.difal = null;
       state.cst060 = null;
-      if (removed) recordOperation('Arquivos removidos', `${removed} arquivo(s) retirado(s) da lista`, 'info');
+      state.readerFilters.nfe = { hasSearched: false, text: '' };
+      state.readerFilters.nfse = { hasSearched: false, text: '' };
+      state.readerFilters.difal = { hasSearched: false, text: '', rate: '' };
+      state.readerFilters.cst060 = { hasSearched: false, text: '', rate: '' };
+      state.nfeFullscreen = false;
+      state.selectedNfeItems.clear();
+      state.confirmedNfeItems.clear();
       render(root);
     } else if (action === 'remove-file') {
-      const removed = state.files.find((file) => file.id === Number(button.dataset.id));
       state.files = state.files.filter((file) => file.id !== Number(button.dataset.id));
-      if (removed) recordOperation('Arquivo removido', 'Um arquivo foi retirado da lista', 'info');
       render(root);
     } else if (action === 'view-xml') {
       const document = getDocuments().find((item) => item.id === button.dataset.id);
@@ -92,14 +128,153 @@ export function mountXmlReader30(root) {
       const document = getDocuments().find((item) => item.id === button.dataset.id);
       if (document) downloadText(document.fileName, document.xml, 'application/xml;charset=utf-8');
     } else if (action === 'export-current') {
-      exportCurrentTab();
-    } else if (action === 'go-dashboard') {
-      state.activeView = 'dashboard';
+      exportCurrentReader();
+    } else if (action === 'nfse-sort') {
+      const key = button.dataset.sortKey;
+      if (!key) return;
+      state.nfseTable.sortDirection = state.nfseTable.sortKey === key && state.nfseTable.sortDirection === 'asc' ? 'desc' : 'asc';
+      state.nfseTable.sortKey = key;
+      state.nfseTable.columnMenuKey = null;
+      render(root);
+    } else if (action === 'nfse-column-menu') {
+      const key = button.dataset.columnKey;
+      state.nfseTable.columnMenuKey = state.nfseTable.columnMenuKey === key ? null : key;
+      const rect = button.getBoundingClientRect();
+      state.nfseTable.columnMenuAnchor = state.nfseTable.columnMenuKey
+        ? { top: Math.min(rect.bottom + 4, window.innerHeight - 70), left: Math.min(rect.left, window.innerWidth - 168) }
+        : null;
+      render(root);
+    } else if (action === 'nfse-column-hide') {
+      const key = button.dataset.columnKey;
+      const visibleCount = state.nfseTable.columnOrder.filter((column) => !state.nfseTable.hiddenColumns.has(column)).length;
+      if (key && visibleCount > 1) state.nfseTable.hiddenColumns.add(key);
+      state.nfseTable.columnMenuKey = null;
+      state.nfseTable.columnMenuAnchor = null;
+      render(root);
+    } else if (action === 'nfse-columns-restore') {
+      state.nfseTable.hiddenColumns.clear();
+      state.nfseTable.columnMenuKey = null;
+      state.nfseTable.columnMenuAnchor = null;
+      render(root);
+    } else if (action === 'nfse-clear-search') {
+      state.readerFilters.nfse = { hasSearched: false, text: '' };
+      state.nfseTable.columnMenuKey = null;
+      state.nfseTable.columnMenuAnchor = null;
+      render(root);
+    } else if (action === 'save-nfe-checks') {
+      const visibleKeys = new Set(getNfeVisibleRows().map(getNfeItemKey));
+      const pendingKeys = [...state.selectedNfeItems].filter((key) => visibleKeys.has(key));
+      for (const key of pendingKeys) {
+        state.confirmedNfeItems.add(key);
+        state.selectedNfeItems.delete(key);
+      }
+      render(root);
+    } else if (action === 'toggle-reader-fullscreen' || action === 'close-reader-fullscreen') {
+      state.nfeFullscreen = action === 'toggle-reader-fullscreen';
       render(root);
     }
   }
 
+  function handleNfseColumnDragStart(event) {
+    const header = event.target.closest('[data-nfse-column-key]');
+    if (!header || event.target.closest('button')) return;
+    const key = header.dataset.nfseColumnKey;
+    if (!key) return;
+    state.nfseTable.dragKey = key;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', key);
+    header.classList.add('is-dragging');
+  }
+
+  function handleNfseColumnDragOver(event) {
+    const header = event.target.closest('[data-nfse-column-key]');
+    if (!header || !state.nfseTable.dragKey || header.dataset.nfseColumnKey === state.nfseTable.dragKey) return;
+    event.preventDefault();
+    const rect = header.getBoundingClientRect();
+    const insertAfter = event.clientX > rect.left + rect.width / 2;
+    header.classList.toggle('drop-after', insertAfter);
+    header.classList.toggle('drop-before', !insertAfter);
+  }
+
+  function handleNfseColumnDrop(event) {
+    const header = event.target.closest('[data-nfse-column-key]');
+    if (!header || !state.nfseTable.dragKey) return;
+    event.preventDefault();
+    const sourceKey = state.nfseTable.dragKey;
+    const targetKey = header.dataset.nfseColumnKey;
+    if (targetKey && targetKey !== sourceKey) {
+      const nextOrder = state.nfseTable.columnOrder.filter((key) => key !== sourceKey);
+      const targetIndex = nextOrder.indexOf(targetKey);
+      const rect = header.getBoundingClientRect();
+      const insertAfter = event.clientX > rect.left + rect.width / 2;
+      nextOrder.splice(targetIndex + (insertAfter ? 1 : 0), 0, sourceKey);
+      state.nfseTable.columnOrder = nextOrder;
+      render(root);
+    }
+    state.nfseTable.dragKey = null;
+  }
+
+  function handleNfseColumnDragEnd() {
+    state.nfseTable.dragKey = null;
+    root.querySelectorAll('[data-nfse-column-key]').forEach((header) => header.classList.remove('is-dragging', 'drop-before', 'drop-after'));
+  }
+
+  function handleReaderColumnDragStart(event) {
+    const header = event.target.closest('.reader-column-header');
+    const table = header?.closest('[data-reader-table]');
+    if (!header || !table) return;
+    state.readerColumnDrag = { table: table.dataset.readerTable, key: header.dataset.readerColumnKey };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', header.dataset.readerColumnKey);
+    header.classList.add('is-dragging');
+  }
+
+  function handleReaderColumnDragOver(event) {
+    const header = event.target.closest('.reader-column-header');
+    const table = header?.closest('[data-reader-table]');
+    const drag = state.readerColumnDrag;
+    if (!header || !table || !drag || table.dataset.readerTable !== drag.table || header.dataset.readerColumnKey === drag.key) return;
+    event.preventDefault();
+    const rect = header.getBoundingClientRect();
+    const insertAfter = event.clientX > rect.left + rect.width / 2;
+    header.classList.toggle('drop-after', insertAfter);
+    header.classList.toggle('drop-before', !insertAfter);
+  }
+
+  function handleReaderColumnDrop(event) {
+    const header = event.target.closest('.reader-column-header');
+    const table = header?.closest('[data-reader-table]');
+    const drag = state.readerColumnDrag;
+    if (!header || !table || !drag || table.dataset.readerTable !== drag.table) return;
+    event.preventDefault();
+    const order = [...state.readerColumnOrders[drag.table]];
+    const nextOrder = order.filter((key) => key !== drag.key);
+    const targetIndex = nextOrder.indexOf(header.dataset.readerColumnKey);
+    if (targetIndex >= 0) {
+      const rect = header.getBoundingClientRect();
+      const insertAfter = event.clientX > rect.left + rect.width / 2;
+      nextOrder.splice(targetIndex + (insertAfter ? 1 : 0), 0, drag.key);
+      state.readerColumnOrders[drag.table] = nextOrder;
+      render(root);
+    }
+    state.readerColumnDrag = null;
+  }
+
+  function handleReaderColumnDragEnd() {
+    state.readerColumnDrag = null;
+    root.querySelectorAll('.reader-column-header').forEach((header) => header.classList.remove('is-dragging', 'drop-before', 'drop-after'));
+  }
+
   async function handleChange(event) {
+    const action = event.target.dataset.action;
+    if (action === 'nfe-item-check') {
+      const key = event.target.dataset.itemKey;
+      if (event.target.checked) state.selectedNfeItems.add(key);
+      else state.selectedNfeItems.delete(key);
+      state.confirmedNfeItems.delete(key);
+      render(root);
+      return;
+    }
     if (event.target.id === 'xmlFileInput') {
       await importFiles(event.target.files);
       event.target.value = '';
@@ -118,22 +293,40 @@ export function mountXmlReader30(root) {
   }
 
   function handleSubmit(event) {
+    if (event.target.id === 'nfeReaderFilterForm') {
+      event.preventDefault();
+      const data = new FormData(event.target);
+      state.readerFilters.nfe = {
+        hasSearched: true,
+        text: String(data.get('text') || '')
+      };
+      render(root);
+    }
+    if (event.target.id === 'nfseReaderFilterForm') {
+      event.preventDefault();
+      const data = new FormData(event.target);
+      state.readerFilters.nfse = {
+        hasSearched: true,
+        text: String(data.get('text') || '')
+      };
+      render(root);
+    }
     if (event.target.id === 'difalForm') {
       event.preventDefault();
-      calculateDifal(new FormData(event.target));
-      if (!state.errors.length) {
-        recordReaderCheck('difal');
-        recordOperation('DIFAL calculado', `${state.difal.rows.length} item(ns) conferido(s)`);
-      }
+      const data = new FormData(event.target);
+      state.readerFilters.difal = { hasSearched: true, text: String(data.get('text') || ''), rate: String(data.get('rate') || '') };
+      calculateDifal(data);
       render(root);
     }
     if (event.target.id === 'cst060Form') {
       event.preventDefault();
-      calculateCst060(new FormData(event.target));
-      if (!state.errors.length) {
-        recordReaderCheck('cst060');
-        recordOperation('CST 060 conferido', `${state.cst060.rows.length} item(ns) analisado(s)`);
-      }
+      const data = new FormData(event.target);
+      state.readerFilters.cst060 = {
+        hasSearched: true,
+        text: String(data.get('text') || ''),
+        rate: String(data.get('rate') || '')
+      };
+      calculateCst060(data);
       render(root);
     }
   }
@@ -142,38 +335,25 @@ export function mountXmlReader30(root) {
     const files = Array.from(fileList || []).filter((file) => /\.xml$/i.test(file.name) || /xml/i.test(file.type));
     if (!files.length) {
       state.errors = ['Selecione arquivos XML para importar.'];
-      recordOperation('Importação não iniciada', 'Nenhum arquivo XML válido foi selecionado', 'warning');
       render(root);
       return;
     }
 
     state.errors = [];
-    let analyzed = 0;
-    const detectedReaders = new Set();
     for (const file of files) {
       try {
         const xml = await file.text();
         const parsed = parseUploadedXml(xml, file.name);
+        const uploadedAt = new Date().toISOString();
         if (parsed.kind === 'event') {
-          state.files.push({ id: nextFileId++, name: file.name, size: file.size, document: null, event: parsed });
+          state.files.push({ id: nextFileId++, name: file.name, size: file.size, uploadedAt, document: null, event: parsed });
         } else {
-          state.files.push({ id: nextFileId++, name: file.name, size: file.size, document: { ...parsed, fileName: file.name, xml } });
-          detectedReaders.add(parsed.kind);
+          state.files.push({ id: nextFileId++, name: file.name, size: file.size, uploadedAt, document: { ...parsed, fileName: file.name, xml, uploadedAt } });
         }
-        analyzed += 1;
       } catch (error) {
         state.errors.push(`${file.name}: ${error.message || 'não foi possível ler o XML.'}`);
       }
     }
-    state.sessionAnalyzed += analyzed;
-    state.dashboard.totalAnalyzed += analyzed;
-    for (const readerId of detectedReaders) recordReaderCheck(readerId, false);
-    if (analyzed) {
-      recordOperation('XMLs analisados', `${analyzed} XML(s) lido(s)${state.errors.length ? ` · ${state.errors.length} com erro` : ''}`, state.errors.length ? 'warning' : 'success', false);
-    } else {
-      recordOperation('Falha na leitura de XML', `${state.errors.length} arquivo(s) não puderam ser interpretados`, 'warning', false);
-    }
-    saveDashboardStore();
     state.difal = null;
     state.cst060 = null;
     render(root);
@@ -182,128 +362,87 @@ export function mountXmlReader30(root) {
 
 function render(root) {
   updateNavigation();
-  if (state.activeView === 'dashboard') {
-    root.innerHTML = renderDashboard(getDocuments());
-    return;
-  }
   renderReaderPage(root);
 }
 
 function renderReaderPage(root) {
   const docs = getDocuments();
   const events = state.files.filter((file) => file.event).length;
+  const activeReaderLabel = readerMenuItems.find(([key]) => key === state.activeReader)?.[1] || 'NF-e';
+  const readerPageDescriptions = {
+    nfe: 'Carregue XMLs de NF-e e pesquise notas, itens e valores fiscais nesta sessão.',
+    nfse: 'Carregue XMLs de NFS-e e consulte os dados fiscais dos serviços.',
+    difal: 'Carregue XMLs de NF-e para pesquisar e calcular o diferencial de alíquotas.',
+    cst060: 'Carregue XMLs de NF-e para pesquisar itens e conferir o CST 060.'
+  };
   root.innerHTML = `
     <section class="reader-page">
       <header class="reader-heading">
-        <div class="reader-kicker">LEITORES FISCAIS · NOTASYNC</div>
-        <h1>Leitor XML 3.0</h1>
-        <p>Carregue seus XMLs para conferir documentos, itens e valores fiscais. Os arquivos são processados localmente no navegador.</p>
+        <span class="reader-kicker">GCONT GESTÃO CONTÁBIL · LEITOR XML 3.0</span>
+        <div class="reader-title-line"><h1>${escapeHtml(activeReaderLabel)}</h1><span class="reader-functional-badge">Funcional</span></div>
+        <p>${escapeHtml(readerPageDescriptions[state.activeReader] || readerPageDescriptions.nfe)} O processamento acontece localmente no navegador.</p>
       </header>
       ${renderUploadPanel(events)}
-      <nav class="reader-tabs" aria-label="Leitores XML">
-        ${tabLabels.map(([key, label]) => `<button type="button" class="reader-tab ${state.activeTab === key ? 'active' : ''}" data-action="switch-tab" data-tab="${key}" aria-selected="${state.activeTab === key}">${label}${key === 'nfe' ? `<span>${docs.filter((item) => item.kind === 'nfe').length}</span>` : ''}</button>`).join('')}
-      </nav>
       <section class="reader-panel">${renderActiveTab(docs)}</section>
       ${renderErrors()}
       ${state.modalXml ? renderXmlModal() : ''}
     </section>
   `;
+  configureReaderColumnDragging(root);
 }
 
-function renderDashboard(docs) {
-  const recent = state.dashboard.operations.slice(0, 6);
-  const readyCount = Object.keys(state.dashboard.readerChecks).filter((key) => readerLabels[key]).length;
-  const readers = Object.entries(readerLabels).map(([id, label]) => {
-    const checkedAt = state.dashboard.readerChecks[id];
-    return `<article class="dashboard-reader-card ${checkedAt ? 'is-working' : ''}">
-      <span class="dashboard-reader-indicator" aria-hidden="true"></span>
-      <div><strong>${escapeHtml(label)}</strong><small>${checkedAt ? `Funcionando · usado em ${escapeHtml(dateTimeLabel(checkedAt))}` : 'Pronto para uso · aguardando primeiro arquivo'}</small></div>
-      ${badge(checkedAt ? 'Funcionando' : 'Pronto', checkedAt ? 'success' : 'neutral')}
-    </article>`;
-  }).join('');
-  return `<section class="dashboard-page">
-    <header class="reader-heading dashboard-heading">
-      <div class="reader-kicker">VISÃO GERAL · NOTASYNC</div>
-      <h1>Dashboard</h1>
-      <p>Acompanhe os XMLs analisados, as operações recentes e o estado dos leitores fiscais.</p>
-    </header>
-    <section class="dashboard-metrics" aria-label="Resumo de atividade">
-      <article class="dashboard-stat-card dashboard-stat-highlight"><span>Total de XMLs analisados</span><strong>${state.dashboard.totalAnalyzed.toLocaleString('pt-BR')}</strong><small>Acumulado neste navegador</small></article>
-      <article class="dashboard-stat-card"><span>Analisados nesta sessão</span><strong>${state.sessionAnalyzed.toLocaleString('pt-BR')}</strong><small>Desde que esta página foi aberta</small></article>
-      <article class="dashboard-stat-card"><span>Documentos carregados</span><strong>${docs.length.toLocaleString('pt-BR')}</strong><small>Únicos na lista atual</small></article>
-      <article class="dashboard-stat-card"><span>Leitores já utilizados</span><strong>${readyCount} / ${Object.keys(readerLabels).length}</strong><small>Confirmados por uma leitura ou cálculo</small></article>
-    </section>
-    <section class="dashboard-columns">
-      <section class="dashboard-panel dashboard-operations-panel" aria-labelledby="operationsTitle">
-        <header class="dashboard-panel-heading"><div><h2 id="operationsTitle">Últimas operações</h2><p>Atividade recente neste navegador</p></div><span class="dashboard-live-dot">Atualizado</span></header>
-        ${recent.length ? `<ol class="operation-list">${recent.map((operation) => `<li class="operation-item"><span class="operation-marker ${escapeHtml(operation.status)}" aria-hidden="true"></span><div class="operation-copy"><strong>${escapeHtml(operation.title)}</strong><span>${escapeHtml(operation.detail)}</span></div><time datetime="${escapeHtml(operation.at)}">${escapeHtml(dateTimeLabel(operation.at))}</time></li>`).join('')}</ol>` : emptyState('Nenhuma operação registrada.', 'Importe XMLs ou execute um cálculo para começar a acompanhar a atividade.')}
-      </section>
-      <section class="dashboard-panel dashboard-readers-panel" aria-labelledby="readersTitle">
-        <header class="dashboard-panel-heading"><div><h2 id="readersTitle">Estado dos leitores</h2><p>Confirmação baseada no uso bem-sucedido</p></div></header>
-        <div class="dashboard-reader-list">${readers}</div>
-      </section>
-    </section>
-    <button type="button" class="primary-button dashboard-open-reader" data-action="go-reader">Abrir Leitor XML 3.0</button>
-  </section>`;
-}
-
-function updateNavigation() {
-  document.querySelectorAll('[data-app-view]').forEach((button) => {
-    const active = button.dataset.appView === state.activeView;
-    if (active) button.setAttribute('aria-current', 'page');
-    else button.removeAttribute('aria-current');
-  });
-}
-
-function loadDashboardStore() {
-  const fallback = { totalAnalyzed: 0, operations: [], readerChecks: {} };
-  try {
-    const value = JSON.parse(localStorage.getItem(dashboardStorageKey) || 'null');
-    if (!value || typeof value !== 'object') return fallback;
-    return {
-      totalAnalyzed: Math.max(0, Number(value.totalAnalyzed) || 0),
-      operations: Array.isArray(value.operations) ? value.operations.slice(0, 10) : [],
-      readerChecks: value.readerChecks && typeof value.readerChecks === 'object' ? value.readerChecks : {}
-    };
-  } catch {
-    return fallback;
+function configureReaderColumnDragging(root) {
+  const reader = state.activeReader;
+  const baseOrder = readerDefaultColumnOrders[reader];
+  if (!baseOrder) return;
+  const table = [...root.querySelectorAll('.reader-table')].find((entry) => !entry.classList.contains('nfse-fiscal-table'));
+  if (!table) return;
+  table.dataset.readerTable = reader;
+  for (const row of table.rows) {
+    const cells = [...row.cells];
+    if (cells.length !== baseOrder.length) continue;
+    cells.forEach((cell, index) => {
+      cell.dataset.readerColumnKey = baseOrder[index];
+      if (row.parentElement.tagName === 'THEAD') {
+        cell.classList.add('reader-column-header');
+        cell.draggable = true;
+        cell.title = 'Arraste para reorganizar esta coluna';
+      }
+    });
+  }
+  const order = state.readerColumnOrders[reader];
+  for (const row of table.rows) {
+    const cells = new Map([...row.cells].map((cell) => [cell.dataset.readerColumnKey, cell]));
+    for (const key of order) {
+      const cell = cells.get(key);
+      if (cell) row.append(cell);
+    }
   }
 }
 
-function saveDashboardStore() {
-  try {
-    localStorage.setItem(dashboardStorageKey, JSON.stringify(state.dashboard));
-  } catch {}
-}
-
-function recordOperation(title, detail, status = 'success', save = true) {
-  state.dashboard.operations.unshift({ at: new Date().toISOString(), title, detail, status });
-  state.dashboard.operations = state.dashboard.operations.slice(0, 10);
-  if (save) saveDashboardStore();
-}
-
-function recordReaderCheck(readerId, save = true) {
-  if (!readerLabels[readerId]) return;
-  state.dashboard.readerChecks[readerId] = new Date().toISOString();
-  if (save) saveDashboardStore();
+function updateNavigation() {
+  document.querySelectorAll('[data-reader]').forEach((button) => {
+    const active = button.dataset.reader === state.activeReader;
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
 }
 
 function renderUploadPanel(eventCount) {
   const docs = getDocuments();
   const countByType = ['nfe', 'cte', 'nfse'].map((kind) => docs.filter((document) => document.kind === kind).length);
   return `
-    <section class="upload-panel" aria-label="Importação de XML">
+    <section class="upload-panel upload-panel-compact" aria-label="Importação de XML">
       <label class="upload-dropzone" for="xmlFileInput">
         <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="upload-copy"><strong>Solte os arquivos XML aqui</strong><span>ou clique para procurar · você pode selecionar vários arquivos</span></span>
-        <span class="upload-cta">Selecionar XMLs</span>
+        <span class="upload-copy"><strong>Adicionar XMLs</strong><span>Selecione um ou vários arquivos do computador</span></span>
+        <span class="upload-cta">Procurar arquivos</span>
         <input id="xmlFileInput" type="file" accept=".xml,text/xml,application/xml" multiple />
       </label>
       <div class="upload-footer">
-        <span class="upload-count"><strong>${state.files.length}</strong> arquivo(s) · ${countByType[0]} NF-e · ${countByType[1]} CT-e · ${countByType[2]} NFS-e${eventCount ? ` · ${eventCount} evento(s)` : ''}</span>
-        <button class="text-button" type="button" data-action="clear-files" ${state.files.length ? '' : 'disabled'}>Limpar arquivos</button>
+        <span class="upload-count"><strong>${state.files.length}</strong> arquivo(s) carregado(s) · ${countByType[0]} NF-e · ${countByType[1]} CT-e · ${countByType[2]} NFS-e${eventCount ? ` · ${eventCount} evento(s)` : ''}</span>
+        <button class="text-button" type="button" data-action="clear-files" ${state.files.length ? '' : 'disabled'}>Limpar</button>
       </div>
-      ${state.files.length ? `<ul class="upload-file-list">${state.files.map((file) => `<li><span class="file-type-dot ${file.event ? 'event' : file.document?.kind || ''}"></span><span class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span><span class="file-size">${formatBytes(file.size)}</span><button type="button" class="file-remove" data-action="remove-file" data-id="${file.id}" aria-label="Remover ${escapeHtml(file.name)}">×</button></li>`).join('')}</ul>` : ''}
     </section>
   `;
 }
@@ -314,78 +453,307 @@ function renderErrors() {
 }
 
 function renderActiveTab(docs) {
-  if (state.activeTab === 'nfe') return renderNfeTab(docs.filter((item) => item.kind === 'nfe'));
-  if (state.activeTab === 'cte') return renderCteTab(docs.filter((item) => item.kind === 'cte'));
-  if (state.activeTab === 'nfse') return renderNfseTab(docs.filter((item) => item.kind === 'nfse'));
-  if (state.activeTab === 'difal') return renderDifalTab(docs.filter((item) => item.kind === 'nfe'));
+  if (state.activeReader === 'nfe') return renderNfeReaderSection(docs.filter((item) => item.kind === 'nfe'));
+  if (state.activeReader === 'nfse') return renderNfseReaderSection(docs.filter((item) => item.kind === 'nfse'));
+  if (state.activeReader === 'difal') return renderDifalTab(docs.filter((item) => item.kind === 'nfe'));
   return renderCst060Tab(docs.filter((item) => item.kind === 'nfe'));
 }
 
+function renderNfeReaderSection(allDocs) {
+  const filter = state.readerFilters.nfe;
+  const docs = filter.hasSearched ? filterNfeDocs(allDocs, filter) : [];
+  return `<section class="reference-reader-section">
+    <header class="reference-module-heading"><div><h2>Leitor de NF-e</h2><p>Leia e confira os XMLs de NF-e carregados nesta sessão.</p></div><div class="reference-module-actions">${statusPill(`${sum(docs, (doc) => doc.items.length)} item(ns)`, docs.length ? 'success' : 'neutral')}<button type="button" class="secondary-button" data-action="export-current" ${docs.length ? '' : 'disabled'}>Exportar Excel</button></div></header>
+    <form class="reference-form" id="nfeReaderFilterForm">
+      <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text)}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
+      <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${allDocs.length ? '' : 'disabled'}>Buscar nota</button></div>
+    </form>
+    ${filter.hasSearched ? `<div class="reference-summary-strip"><span>Notas encontradas: <strong>${docs.length}</strong></span><span>Valor total: <strong>${money(sum(docs, (doc) => doc.total))}</strong></span><span>ICMS: <strong>${money(sum(docs.flatMap(nfeRows), (row) => row.icms))}</strong></span></div>${renderNfeTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NF-e para começar.', 'Pesquise pelo número, chave, CNPJ, cliente ou produto.')}
+  </section>`;
+}
+function renderNfseReaderSection(allDocs) {
+  const filter = state.readerFilters.nfse;
+  const docs = filter.hasSearched ? filterNfseDocs(allDocs, filter) : [];
+  const lastImported = docs.map((doc) => doc.uploadedAt).filter(Boolean).sort().at(-1);
+  return `<section class="reference-reader-section">
+    <header class="reference-module-heading"><div><h2>Leitura fiscal de NFS-e</h2><p>Consulte as NFS-e carregadas nesta sessão e confira os dados fiscais consolidados.</p></div>${statusPill(`${docs.length} linha(s)`, docs.length ? 'success' : 'neutral')}</header>
+    <form class="reference-form reference-form-wide nfse-reader-search-form" id="nfseReaderFilterForm">
+      <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text)}" placeholder="Número, chave, CNPJ, prestador, tomador ou serviço..." /></label>
+      <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${allDocs.length ? '' : 'disabled'}>Buscar NFS-e</button><button class="secondary-button" type="button" data-action="nfse-clear-search" ${filter.hasSearched || filter.text ? '' : 'disabled'}>Limpar</button></div>
+    </form>
+    ${filter.hasSearched ? `<div class="reference-summary-strip nfse-source-summary"><span>Fonte: <strong>Upload local</strong></span><span>Resultado: <strong>${docs.length} XML(s)</strong></span><span>Valor somado: <strong>${money(sum(docs.filter((doc) => !isCancelled(doc)), (doc) => doc.serviceValue))}</strong></span><span>Atualizado: <strong>${lastImported ? escapeHtml(dateTimeLabel(lastImported)) : '—'}</strong></span></div>${renderNfseTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NFS-e para começar.', 'Pesquise pelo número, chave, CNPJ, prestador, tomador ou serviço.')}
+  </section>`;
+}
+function filterNfeDocs(docs, filter) {
+  const query = normalize(filter.text);
+  if (!query) return docs;
+  return docs.filter((doc) => {
+    const searchable = `${doc.fileName} ${doc.key} ${doc.number} ${doc.issuer} ${doc.recipient} ${doc.issuerCnpj} ${doc.recipientCnpj} ${doc.statusCode} ${doc.cancelled ? 'cancelada' : 'ativa'} ${doc.items.map((item) => `${item.description} ${item.ncm} ${item.cfop} ${item.cstCsosn}`).join(' ')}`;
+    return normalize(searchable).includes(query);
+  });
+}
+
+function filterNfseDocs(docs, filter) {
+  const query = normalize(filter.text);
+  if (!query) return docs;
+  return docs.filter((doc) => {
+    const searchable = `${doc.fileName} ${doc.key} ${doc.number} ${doc.issuer} ${doc.issuerCnpj} ${doc.taker} ${doc.takerCnpj} ${doc.takerMunicipality} ${doc.serviceLocation} ${doc.issIncidence} ${doc.serviceCode} ${doc.serviceDescription} ${doc.status} ${doc.issRetention} ${doc.federalRetention} ${doc.serviceValue} ${doc.netValue} ${doc.withheldValue} ${doc.issValue} ${doc.irrfValue} ${doc.csllValue}`;
+    return normalize(searchable).includes(query);
+  });
+}
+
+function statusPill(label, tone = 'neutral') {
+  return `<span class="reference-status-pill ${tone}">${escapeHtml(label)}</span>`;
+}
+
 function renderNfeTab(docs) {
-  const rows = filterRows(docs.flatMap((doc) => nfeRows(doc)), 'nfe', (row) => `${row.number} ${row.issuer} ${row.product} ${row.ncm} ${row.cst} ${row.cfop} ${row.key}`);
+  const allRows = filterRows(docs.flatMap((doc) => nfeRows(doc)), 'nfe', (row) => `${row.number} ${row.issuer} ${row.product} ${row.ncm} ${row.cst} ${row.cfop} ${row.key}`);
+  const rows = allRows;
   const total = docs.filter((doc) => !isCancelled(doc)).reduce((sum, doc) => sum + doc.total, 0);
   return `
-    ${renderToolbar('nfe', 'NF-e', `${rows.length} item(ns)`, docs.length)}
     <div class="reader-metrics">${metric('Documentos', docs.length)}${metric('Itens', docs.reduce((sum, doc) => sum + doc.items.length, 0))}${metric('Valor das notas', money(total))}${metric('Canceladas', docs.filter((doc) => isCancelled(doc)).length)}</div>
-    ${rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NF-e</th><th>Situação</th><th>Emissão</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Qtd.</th><th>V. produto</th><th>Base ICMS</th><th>Alíq.</th><th>ICMS</th><th>ICMS ST retido</th><th>Mono retido</th><th>Abrir</th></tr></thead><tbody>${rows.map((row) => `<tr><td><strong>${escapeHtml(row.number)}</strong><small>${escapeHtml(row.key || row.fileName)}</small></td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : 'Ativa', isCancelled(row.doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td>${escapeHtml(row.issuer || '-')}<small>${escapeHtml(row.issuerCnpj || '')}</small></td><td class="product-cell">${escapeHtml(row.product)}</td><td>${escapeHtml(row.ncm)}</td><td>${escapeHtml(row.cfop)}</td><td>${escapeHtml(row.cst)}</td><td>${escapeHtml(row.quantity)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.baseIcms)}</td><td>${escapeHtml(row.aliquota)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.icmsSt)}</td><td class="money">${money(row.icmsMono)}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${row.doc.id}" aria-label="Abrir XML ${escapeHtml(row.number)}">XML</button></td></tr>`).join('')}</tbody></table></div>` : emptyState(docs.length ? 'Nenhum item corresponde à busca.' : 'Carregue XMLs de NF-e para começar.', 'Cada produto aparece em uma linha para facilitar a conferência.')}
+    ${renderNfeResultsTools(rows)}
+    ${rows.length ? `<div class="reader-table-wrap ${state.nfeFullscreen ? 'reader-fullscreen' : ''}">${state.nfeFullscreen ? `<div class="reader-fullscreen-bar"><strong>XMLs encontrados · NF-e</strong><button class="secondary-button" type="button" data-action="close-reader-fullscreen">Fechar tela cheia</button></div>` : ''}<table class="reader-table wide"><thead><tr><th>Conferido</th><th>NF-e</th><th>Status</th><th>Emissão</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Qtd.</th><th>V. produto</th><th>Base ICMS</th><th>Alíq.</th><th>ICMS</th><th>ICMS ST retido</th><th>Mono retido</th><th>Abrir</th></tr></thead><tbody>${rows.map((row) => { const key = getNfeItemKey(row); const checked = state.selectedNfeItems.has(key) || state.confirmedNfeItems.has(key); return `<tr><td><label class="nfe-item-check"><input type="checkbox" data-action="nfe-item-check" data-item-key="${escapeHtml(key)}" ${checked ? 'checked' : ''} aria-label="Marcar NF-e ${escapeHtml(row.number)} item ${escapeHtml(row.item.index)} como conferido" /><span></span></label></td><td><strong>${escapeHtml(row.number)}</strong></td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.doc.statusCode === '100' ? 'Autorizada' : 'Lida', isCancelled(row.doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td><span class="issuer-name" title="${escapeHtml(row.issuer || '-')}">${escapeHtml(limitDisplayText(row.issuer || '-', 21))}</span><small>${escapeHtml(row.issuerCnpj || '')}</small></td><td class="product-cell">${escapeHtml(row.product)}</td><td>${escapeHtml(row.ncm)}</td><td>${escapeHtml(row.cfop)}</td><td>${escapeHtml(row.cst)}</td><td>${escapeHtml(row.quantity)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.baseIcms)}</td><td>${escapeHtml(row.aliquota)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.icmsSt)}</td><td class="money">${money(row.icmsMono)}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${row.doc.id}" aria-label="Abrir XML ${escapeHtml(row.number)}">XML</button></td></tr>`; }).join('')}</tbody></table></div>` : emptyState(docs.length ? 'Nenhum item corresponde à consulta.' : 'Nenhuma NF-e encontrada com esse termo de busca.', 'Confira o texto digitado ou envie outros arquivos XML.')}
   `;
 }
 
+function renderNfeResultsTools(visibleRows) {
+  const confirmedVisible = visibleRows.filter((row) => state.confirmedNfeItems.has(getNfeItemKey(row))).length;
+  const selectedVisible = visibleRows.filter((row) => state.selectedNfeItems.has(getNfeItemKey(row))).length;
+  return `<div class="nfe-results-toolbar">
+    <div><h3>XMLs encontrados</h3><p>Mostrando ${visibleRows.length} linha(s) itemizada(s) das NF-e encontradas.</p></div>
+    <div class="nfe-results-controls">
+      ${statusPill(`${confirmedVisible} conferido(s)`, confirmedVisible ? 'success' : 'neutral')}
+      <button type="button" class="primary-button nfe-save-checks" data-action="save-nfe-checks" ${selectedVisible ? '' : 'disabled'}>Salvar${selectedVisible ? ` (${selectedVisible})` : ''}</button>
+      <button type="button" class="reader-fullscreen-button" data-action="toggle-reader-fullscreen" aria-label="Abrir tabela em tela cheia" title="Tela cheia" ${visibleRows.length ? '' : 'disabled'}>⛶</button>
+    </div>
+    <small>Marque as linhas conferidas ou abra o XML original.</small>
+  </div>`;
+}
+function getNfeItemKey(row) {
+  return `${row.doc.id}:${row.item.index}`;
+}
+
+function getNfeVisibleRows() {
+  if (!state.readerFilters.nfe.hasSearched) return [];
+  const docs = filterNfeDocs(getDocuments().filter((doc) => doc.kind === 'nfe'), state.readerFilters.nfe);
+  return docs.flatMap((doc) => nfeRows(doc));
+}
 function renderCteTab(docs) {
   const rows = filterRows(docs, 'cte', (doc) => `${doc.number} ${doc.issuer} ${doc.key} ${doc.service.productLabel}`);
   return `
     ${renderToolbar('cte', 'CT-e', `${rows.length} documento(s)`, docs.length)}
     <div class="reader-metrics">${metric('Documentos', docs.length)}${metric('Valor dos serviços', money(docs.reduce((sum, doc) => sum + (doc.service.totalValue || 0), 0)))}${metric('Cancelados', docs.filter(isCancelled).length)}</div>
-    ${rows.length ? `<div class="reader-table-wrap"><table class="reader-table"><thead><tr><th>CT-e</th><th>Situação</th><th>Emissão</th><th>Emitente</th><th>Serviço</th><th>Valor</th><th>Componentes</th><th>XML</th></tr></thead><tbody>${rows.map((doc) => `<tr><td><strong>${escapeHtml(doc.number)}</strong><small>${escapeHtml(doc.key || doc.fileName)}</small></td><td>${badge(isCancelled(doc) ? 'Cancelado' : 'Ativo', isCancelled(doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(doc.issuedAt))}</td><td>${escapeHtml(doc.issuer || '-')}<small>${escapeHtml(doc.issuerCnpj || '')}</small></td><td>${escapeHtml(doc.service.productLabel || '-')}</td><td class="money">${money(doc.service.totalValue)}</td><td>${escapeHtml(doc.service.components.map((item) => `${item.name}: ${item.valueLabel}`).join(' · ') || '-')}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${doc.id}">XML</button></td></tr>`).join('')}</tbody></table></div>` : emptyState('Carregue XMLs de CT-e para começar.', 'O leitor identifica o documento e resume os componentes do serviço.')}
+    ${rows.length ? `<div class="reader-table-wrap"><table class="reader-table"><thead><tr><th>CT-e</th><th>Situação</th><th>Emissão</th><th>Emitente</th><th>Serviço</th><th>Valor</th><th>Componentes</th><th>XML</th></tr></thead><tbody>${rows.map((doc) => `<tr><td><strong>${escapeHtml(doc.number)}</strong></td><td>${badge(isCancelled(doc) ? 'Cancelado' : 'Ativo', isCancelled(doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(doc.issuedAt))}</td><td>${escapeHtml(doc.issuer || '-')}<small>${escapeHtml(doc.issuerCnpj || '')}</small></td><td>${escapeHtml(doc.service.productLabel || '-')}</td><td class="money">${money(doc.service.totalValue)}</td><td>${escapeHtml(doc.service.components.map((item) => `${item.name}: ${item.valueLabel}`).join(' · ') || '-')}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${doc.id}">XML</button></td></tr>`).join('')}</tbody></table></div>` : emptyState('Carregue XMLs de CT-e para começar.', 'O leitor identifica o documento e resume os componentes do serviço.')}
   `;
 }
 
 function renderNfseTab(docs) {
-  const rows = filterRows(docs, 'nfse', (doc) => `${doc.number} ${doc.issuer} ${doc.taker} ${doc.issuerCnpj} ${doc.serviceCode} ${doc.serviceDescription} ${doc.key}`);
   const activeDocs = docs.filter((doc) => !isCancelled(doc));
-  const totalWithheld = activeDocs.reduce((sum, doc) => sum + doc.withheldValue, 0);
-  return `
-    ${renderToolbar('nfse', 'NFS-e fiscal', `${rows.length} documento(s)`, docs.length)}
-    <div class="reader-metrics">${metric('NFS-e', docs.length)}${metric('Valor dos serviços', money(activeDocs.reduce((sum, doc) => sum + doc.serviceValue, 0)))}${metric('ISS', money(activeDocs.reduce((sum, doc) => sum + doc.issValue, 0)))}${metric('Retenções identificadas', money(totalWithheld))}</div>
-    ${rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NFS-e</th><th>Status</th><th>Emissão</th><th>Local da prestação</th><th>Incidência ISS</th><th>Prestador</th><th>CNPJ prestador</th><th>Tomador</th><th>Município tomador</th><th>CNPJ tomador</th><th>Valor líquido</th><th>Retenções</th><th>Serviço</th><th>ISS</th><th>PIS</th><th>COFINS</th><th>INSS</th><th>IRRF</th><th>CSLL</th><th>ISS retido</th><th>Alíquota</th><th>XML</th></tr></thead><tbody>${rows.map((doc) => `<tr><td><strong>${escapeHtml(doc.number)}</strong><small>${escapeHtml(doc.key || doc.fileName)}</small></td><td>${badge(doc.status || (doc.cancelled ? 'Cancelada' : 'Lida'), doc.cancelled ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(doc.issuedAt))}</td><td>${escapeHtml(doc.serviceLocation || '-')}</td><td>${escapeHtml(doc.issIncidence || '-')}</td><td>${escapeHtml(doc.issuer || '-')}</td><td>${escapeHtml(doc.issuerCnpj || '-')}</td><td>${escapeHtml(doc.taker || '-')}</td><td>${escapeHtml(doc.takerMunicipality || '-')}</td><td>${escapeHtml(doc.takerCnpj || '-')}</td><td class="money">${money(doc.netValue)}</td><td class="money">${money(doc.withheldValue)}</td><td class="money">${money(doc.serviceValue)}</td><td class="money">${money(doc.issValue)}</td><td class="money">${money(doc.pisValue)}</td><td class="money">${money(doc.cofinsValue)}</td><td class="money">${money(doc.inssValue)}</td><td class="money">${money(doc.irrfValue)}</td><td class="money">${money(doc.csllValue)}</td><td>${escapeHtml(doc.issRetention || '-')}</td><td>${escapeHtml(doc.issRate ? `${doc.issRate}%` : '-')}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${doc.id}">XML</button></td></tr>`).join('')}</tbody></table></div>` : emptyState('Carregue XMLs de NFS-e para começar.', 'Suporta estruturas do padrão nacional e ABRASF.')}
-  `;
+  const columns = getNfseFiscalColumns();
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const visibleColumns = state.nfseTable.columnOrder.map((key) => byKey.get(key)).filter((column) => column && !state.nfseTable.hiddenColumns.has(column.key));
+  const hiddenCount = state.nfseTable.hiddenColumns.size;
+  const errorCount = docs.filter((doc) => doc.processingError).length;
+  const lastImported = docs.map((doc) => doc.uploadedAt).filter(Boolean).sort().at(-1);
+  const orderedDocs = sortNfseFiscalDocuments(docs);
+  const menuAnchor = state.nfseTable.columnMenuAnchor || { top: 8, left: 8 };
+  const summary = `<div class="reader-metrics nfse-fiscal-summary">
+    ${metric('Filtradas', docs.length)}${metric('Lidas', docs.length - errorCount)}${metric('Com erro', errorCount)}${metric('Sem XML', 0)}
+    ${metric('Valor serviço', money(sum(activeDocs, (doc) => doc.serviceValue)))}${metric('ISS retido real', money(sum(activeDocs, (doc) => doc.issRetainedValue)))}${metric('ISS total', money(sum(activeDocs, (doc) => doc.issValue)))}${metric('Valor retido', money(sum(activeDocs, (doc) => doc.withheldValue)))}
+    ${metric('Valor líquido', money(sum(activeDocs, (doc) => doc.netValue)))}${metric('IRRF', money(sum(activeDocs, (doc) => doc.irrfValue)))}${metric('Retenções federais', money(sum(activeDocs, (doc) => doc.federalWithheldValue)))}${metric('CSLL', money(sum(activeDocs, (doc) => doc.csllValue)))}
+  </div>`;
+  const table = visibleColumns.length && orderedDocs.length
+    ? `<div class="reader-table-wrap nfse-fiscal-table-wrap">
+        <table class="reader-table wide nfse-fiscal-table" style="min-width:${Math.max(1480, visibleColumns.length * 138)}px">
+          <thead><tr>${visibleColumns.map((column) => `<th class="nfse-fiscal-column-header" data-nfse-column-key="${column.key}" draggable="true" title="Arraste para reorganizar esta coluna"><div class="nfse-fiscal-column-head">
+            <button class="nfse-fiscal-sort" type="button" data-action="nfse-sort" data-sort-key="${column.key}" aria-label="Ordenar por ${escapeHtml(column.label)}">${escapeHtml(column.label)} <span aria-hidden="true">${state.nfseTable.sortKey === column.key ? state.nfseTable.sortDirection === 'asc' ? '↑' : '↓' : '↕'}</span></button>
+            <span class="nfse-column-menu-wrap" data-nfse-column-menu-wrap><button class="nfse-column-menu-button" type="button" data-action="nfse-column-menu" data-column-key="${column.key}" aria-label="Opções da coluna ${escapeHtml(column.label)}" aria-expanded="${state.nfseTable.columnMenuKey === column.key}">&#8942;</button>
+              ${state.nfseTable.columnMenuKey === column.key ? `<span class="nfse-column-menu-panel" role="menu" style="top:${escapeHtml(String(menuAnchor.top))}px;left:${escapeHtml(String(menuAnchor.left))}px"><button type="button" data-action="nfse-column-hide" data-column-key="${column.key}" role="menuitem" ${visibleColumns.length <= 1 ? 'disabled' : ''}>Ocultar coluna</button></span>` : ''}
+            </span>
+          </div></th>`).join('')}</tr></thead>
+          <tbody>${orderedDocs.map((doc) => `<tr>${visibleColumns.map((column) => renderNfseFiscalCell(column, doc)).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>`
+    : emptyState(orderedDocs.length ? 'Reative ao menos uma coluna para visualizar a tabela.' : 'Nenhuma NFS-e encontrada com esse termo de busca.', orderedDocs.length ? '' : 'Confira o texto digitado ou envie outros arquivos XML.');
+  return `<article class="reader-panel nfse-fiscal-results-panel">
+    <header class="nfse-fiscal-results-heading"><div><h3>Leitura fiscal das NFS-e filtradas</h3><p>Tabela consolidada no estilo do LeitorXML, usando as NFS-e carregadas nesta sessão. Arraste os cabeçalhos para reorganizar, ordene pelos títulos ou oculte colunas para focar na conferência.</p></div><div class="reference-module-actions">${statusPill(`${docs.length} linha(s)`, docs.length ? 'success' : 'neutral')}<button type="button" class="secondary-button" data-action="export-current" ${docs.length ? '' : 'disabled'}>Exportar Excel</button></div></header>
+    <div class="nfse-fiscal-meta"><span>Fonte: <strong>Upload local</strong></span><span>Resultado: <strong>${docs.length} XML(s)</strong></span><span>Colunas visíveis: <strong>${visibleColumns.length}</strong></span><span>Atualizado: <strong>${lastImported ? escapeHtml(dateTimeLabel(lastImported)) : '—'}</strong></span></div>
+    ${summary}
+    <div class="nfse-fiscal-table-heading"><div><h4>Notas fiscais do período</h4><p>Dados fiscais e retenções informados nos XMLs enviados.</p></div><button type="button" class="secondary-button" data-action="nfse-columns-restore" ${hiddenCount ? '' : 'disabled'}>Restaurar colunas${hiddenCount ? ` (${hiddenCount})` : ''}</button></div>
+    <p class="nfse-fiscal-table-hint">Clique em XML para abrir o arquivo original. Use o menu de cada cabeçalho para ocultar colunas; arraste para reorganizar.</p>
+    ${table}
+    ${renderNfseMunicipalitySummaries(activeDocs)}
+  </article>`;
+}
+
+function getNfseFiscalColumns() {
+  return [
+    { key: 'number', label: 'Número', kind: 'text', value: (doc) => doc.number || '—' },
+    { key: 'serviceLocation', label: 'Local prestação', kind: 'text', value: (doc) => doc.serviceLocation || '—' },
+    { key: 'issIncidence', label: 'Local ISS', kind: 'text', value: (doc) => doc.issIncidence || '—' },
+    { key: 'issuer', label: 'Prestador', kind: 'text', value: (doc) => doc.issuer || '—' },
+    { key: 'issuerCnpj', label: 'CNPJ prestador', kind: 'cnpj', value: (doc) => doc.issuerCnpj || '' },
+    { key: 'taker', label: 'Tomador', kind: 'text', value: (doc) => doc.taker || '—' },
+    { key: 'takerMunicipality', label: 'Município tomador', kind: 'text', value: (doc) => doc.takerMunicipality || '—' },
+    { key: 'takerCnpj', label: 'CNPJ tomador', kind: 'cnpj', value: (doc) => doc.takerCnpj || '' },
+    { key: 'discountValue', label: 'Desconto', kind: 'money', value: (doc) => doc.discountValue },
+    { key: 'netValue', label: 'Valor líquido', kind: 'money', value: (doc) => doc.netValue },
+    { key: 'withheldValue', label: 'Valor retido', kind: 'money', value: (doc) => doc.withheldValue },
+    { key: 'serviceValue', label: 'Valor serviço', kind: 'money', value: (doc) => doc.serviceValue },
+    { key: 'issValue', label: 'ISS', kind: 'money', value: (doc) => doc.issValue },
+    { key: 'pisValue', label: 'PIS', kind: 'money', value: (doc) => doc.pisValue },
+    { key: 'cofinsValue', label: 'COFINS', kind: 'money', value: (doc) => doc.cofinsValue },
+    { key: 'inssValue', label: 'INSS', kind: 'money', value: (doc) => doc.inssValue },
+    { key: 'irrfValue', label: 'IRRF', kind: 'money', value: (doc) => doc.irrfValue },
+    { key: 'csllValue', label: 'CSLL', kind: 'money', value: (doc) => doc.csllValue },
+    { key: 'issuedAt', label: 'Data emissão', kind: 'date', value: (doc) => doc.issuedAt || '' },
+    { key: 'issRetention', label: 'ISS RET', kind: 'text', value: (doc) => doc.issRetention || '—' },
+    { key: 'federalRetention', label: 'Federal RET', kind: 'text', value: (doc) => doc.federalRetention || '—' },
+    { key: 'issRate', label: 'Alíq ISS', kind: 'percent', value: (doc) => doc.issRate },
+    { key: 'issRetainedValue', label: 'ISS retido real', kind: 'money', value: (doc) => doc.issRetainedValue },
+    { key: 'actualIssRate', label: 'Alíq real ISS', kind: 'percent', value: (doc) => doc.actualIssRate },
+    { key: 'processingStatus', label: 'Status', kind: 'status', value: getNfseProcessingStatus },
+    { key: 'processingError', label: 'Erro', kind: 'text', value: (doc) => doc.processingError || '—' }
+  ];
+}
+
+function renderNfseFiscalCell(column, doc) {
+  const rawValue = column.value(doc);
+  let displayValue = rawValue ?? '—';
+  if (column.kind === 'money') displayValue = money(rawValue);
+  if (column.kind === 'percent') displayValue = rawValue ? `${numeric(rawValue).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : '—';
+  if (column.kind === 'date') displayValue = dateLabel(rawValue);
+  if (column.kind === 'cnpj') displayValue = formatNfseDocumentId(rawValue);
+  if (column.kind === 'status') {
+    const status = getNfseProcessingStatus(doc);
+    return `<td class="nfse-cell-${column.key}">${badge(status, status === 'OK' ? 'success' : status === 'ERRO' ? 'danger' : 'warning')}</td>`;
+  }
+  if (column.key === 'number') {
+    return `<td class="nfse-cell-${column.key} nfse-fiscal-number-cell"><strong>${escapeHtml(String(displayValue))}</strong><button type="button" class="nfse-xml-link" data-action="view-xml" data-id="${escapeHtml(doc.id)}">XML</button></td>`;
+  }
+  const title = ['issuer', 'taker', 'serviceLocation', 'issIncidence', 'takerMunicipality', 'processingError'].includes(column.key) ? ` title="${escapeHtml(String(displayValue))}"` : '';
+  return `<td class="nfse-cell-${column.key} ${column.kind === 'money' ? 'money' : ''}"${title}>${escapeHtml(String(displayValue))}</td>`;
+}
+
+function getNfseProcessingStatus(doc) {
+  if (doc.cancelled || /cancel/i.test(String(doc.status || ''))) return 'Cancelada';
+  if (doc.processingError) return 'ERRO';
+  return 'OK';
+}
+
+function formatNfseDocumentId(value) {
+  const raw = digits(value);
+  if (raw.length === 14) return raw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  if (raw.length === 11) return raw.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  return raw || '—';
+}
+
+function sortNfseFiscalDocuments(docs) {
+  const column = getNfseFiscalColumns().find((item) => item.key === state.nfseTable.sortKey);
+  if (!column) return [...docs];
+  const direction = state.nfseTable.sortDirection === 'asc' ? 1 : -1;
+  return [...docs].sort((left, right) => {
+    const a = column.value(left);
+    const b = column.value(right);
+    let result;
+    if (column.kind === 'money' || column.kind === 'percent') result = numeric(a) - numeric(b);
+    else if (column.kind === 'date') result = new Date(a || 0).getTime() - new Date(b || 0).getTime();
+    else result = normalize(a).localeCompare(normalize(b), 'pt-BR', { numeric: true, sensitivity: 'base' });
+    return result ? result * direction : String(left.id).localeCompare(String(right.id));
+  });
+}
+
+function renderNfseMunicipalitySummaries(docs) {
+  const groupBy = (valueSelector) => {
+    const groups = new Map();
+    docs.forEach((doc) => {
+      const name = String(valueSelector(doc) || '').trim() || 'Não informado';
+      const row = groups.get(name) || { name, count: 0, service: 0, net: 0, iss: 0 };
+      row.count += 1;
+      row.service += numeric(doc.serviceValue);
+      row.net += numeric(doc.netValue);
+      row.iss += numeric(doc.issValue);
+      groups.set(name, row);
+    });
+    return [...groups.values()].sort((left, right) => right.service - left.service);
+  };
+  const summaries = [
+    ['Somatório por município - Local prestação', groupBy((doc) => doc.serviceLocation)],
+    ['Somatório por município - Local ISS', groupBy((doc) => doc.issIncidence || doc.serviceLocation)]
+  ];
+  if (!docs.length) return '';
+  return `<div class="nfse-municipality-grid">${summaries.map(([title, rows]) => `<section class="nfse-municipality-card"><h4>${escapeHtml(title)}</h4><div class="nfse-municipality-scroll"><table><thead><tr><th>Município</th><th>Notas</th><th>Valor serviço</th><th>Valor líquido</th><th>ISS</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.count}</td><td class="money">${money(row.service)}</td><td class="money">${money(row.net)}</td><td class="money">${money(row.iss)}</td></tr>`).join('')}</tbody></table></div></section>`).join('')}</div>`;
 }
 
 function renderDifalTab(docs) {
-  const recipients = [...new Set(docs.map((doc) => doc.recipientCnpj).filter(Boolean))];
+  const query = state.readerFilters.difal || {};
   const report = state.difal;
   return `
-    <div class="panel-heading"><div><h2>DIFAL das NF-e</h2><p>Analisa compras interestaduais com ICMS a 4%, usando a fórmula por dentro do Leitor XML 3.0.</p></div></div>
-    <form class="analysis-form" id="difalForm">
-      <label>Destinatário / CNPJ comprador<select name="recipient" required><option value="">Selecione o CNPJ da empresa</option>${recipients.map((cnpj) => `<option value="${escapeHtml(cnpj)}">${escapeHtml(cnpj)}</option>`).join('')}</select></label>
-      <label>Alíquota interna (%)<input name="rate" type="number" min="0.01" max="99.99" step="0.01" placeholder="Ex.: 18" required /></label>
-      <label>Emissão inicial<input name="start" type="date" /></label>
-      <label>Emissão final<input name="end" type="date" /></label>
-      <button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Calcular DIFAL</button>
+    <header class="reference-module-heading"><div><h2>DIFAL das NF-e</h2><p>Busque uma NF-e carregada para conferir o DIFAL.</p></div>${statusPill(report ? `${report.rows.length} item(ns)` : '0 item(ns)', report?.rows.length ? 'success' : 'neutral')}</header>
+    <form class="reference-form" id="difalForm">
+      <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(query.text || '')}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
+      <label class="reference-field span-2">Alíquota interna para o cálculo (%)<input name="rate" type="number" min="0.01" max="99.99" step="0.01" placeholder="Ex.: 18" value="${escapeHtml(query.rate || '')}" required /></label>
+      <div class="reference-hint span-4"><span aria-hidden="true"></span>O cálculo considera apenas itens com ICMS interestadual de 4% das NF-e enviadas por upload.</div>
+      <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Buscar nota e calcular DIFAL</button></div>
     </form>
-    ${!recipients.length && docs.length ? `<p class="inline-note">Não encontrei CNPJ de destinatário nos XMLs carregados.</p>` : ''}
-    ${report ? renderDifalReport(report) : emptyState('Informe o CNPJ comprador e a alíquota interna.', 'Somente itens com ICMS interestadual de 4% entram no DIFAL. Notas canceladas ficam fora das somas.')}
+    ${report ? renderDifalReport(report) : emptyState('Busque uma nota para iniciar.', 'O cálculo usa as NF-e enviadas por upload e exige a alíquota interna.')}
   `;
 }
-
 function renderDifalReport(report) {
-  return `<div class="reader-metrics">${metric('NF-e consideradas', report.notes)}${metric('Itens analisados', report.rows.length)}${metric('ICMS próprio', money(report.icmsOwn))}${metric('ICMS 4%', money(report.icms4))}${metric('ICMS mono no XML', money(report.mono))}${metric('DIFAL', money(report.difal), 'highlight')}</div><p class="inline-note">O ICMS monofásico exibido é o valor informado no XML. A tabela de alíquotas vigentes do sistema original não acompanha esta versão de leitura local.</p>${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NF-e</th><th>Emissão</th><th>Produto</th><th>CST</th><th>Base ICMS</th><th>Alíq. interestadual</th><th>ICMS</th><th>ICMS mono XML</th><th>DIFAL</th><th>Situação</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.cstCsosn)}</td><td class="money">${money(row.base)}</td><td>${escapeHtml(row.rate)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.mono)}</td><td class="money">${row.difal === null ? '—' : money(row.difal)}</td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.rate === 4 ? 'ICMS 4%' : 'Fora do cálculo', isCancelled(row.doc) ? 'danger' : row.rate === 4 ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhuma NF-e encontrada para esse destinatário e período.', '')}`;
+  const rate = numeric(state.readerFilters.difal?.rate);
+  return `<div class="difal-report-grid">
+    <section class="difal-period-summary"><h3>Resumo das NF-e</h3>
+      <article><span class="difal-summary-icon" aria-hidden="true">▤</span><div><small>Notas fiscais analisadas</small><strong>${report.notes} nota(s)</strong></div></article>
+      <article><span class="difal-summary-icon" aria-hidden="true">◷</span><div><small>Alíquota interna usada</small><strong>${rate}%</strong></div></article>
+      <article><span class="difal-summary-icon" aria-hidden="true">＄</span><div><small>Valor total do DIFAL</small><strong>${money(report.difal)}</strong></div></article>
+    </section>
+    <section class="difal-chart-panel"><header><h3>Evolução do DIFAL nos XMLs</h3><span>Por dia</span></header>${renderDifalChart(report.rows)}</section>
+  </div>
+  <div class="reference-summary-strip"><span>Itens analisados: <strong>${report.rows.length} item(ns)</strong></span><span>Soma ICMS monofásico: <strong>${money(report.mono)}</strong></span><span>Soma ICMS próprio: <strong>${money(report.icmsOwn)}</strong></span><span>Soma ICMS 4%: <strong>${money(report.icms4)}</strong></span></div>
+  <p class="inline-note">O ICMS monofásico exibido é o valor informado nos XMLs. Somente itens com ICMS interestadual de 4% entram no cálculo do DIFAL.</p>
+  ${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NF-e</th><th>Emissão</th><th>Produto</th><th>CST</th><th>Base ICMS</th><th>Alíq. interestadual</th><th>ICMS</th><th>ICMS mono XML</th><th>DIFAL</th><th>Situação</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.cstCsosn)}</td><td class="money">${money(row.base)}</td><td>${escapeHtml(row.rate)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.mono)}</td><td class="money">${row.difal === null ? '—' : money(row.difal)}</td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.rate === 4 ? 'ICMS 4%' : 'Fora do cálculo', isCancelled(row.doc) ? 'danger' : row.rate === 4 ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item elegível para o DIFAL foi encontrado nos XMLs carregados.', '')}`;
+}
+
+function renderDifalChart(rows) {
+  const grouped = new Map();
+  for (const row of rows.filter((item) => item.difal !== null && !isCancelled(item.doc))) {
+    const key = dateKey(row.doc.issuedAt) || 'sem-data';
+    grouped.set(key, (grouped.get(key) || 0) + numeric(row.difal));
+  }
+  const entries = [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  if (!entries.length) return `<div class="difal-chart-empty">O gráfico aparecerá quando houver itens elegíveis ao cálculo.</div>`;
+  const maxValue = Math.max(0.01, ...entries.map(([, value]) => value));
+  const points = entries.map(([key, value], index) => {
+    const x = entries.length === 1 ? 350 : 42 + index * (616 / (entries.length - 1));
+    const y = 178 - (value / maxValue) * 138;
+    return { key, value, x, y };
+  });
+  const pointText = points.map((point) => `${point.x},${point.y}`).join(' ');
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  return `<svg class="difal-chart" viewBox="0 0 700 230" role="img" aria-label="Evolução diária do DIFAL calculado">
+    <line x1="42" y1="40" x2="658" y2="40"/><line x1="42" y1="109" x2="658" y2="109"/><line x1="42" y1="178" x2="658" y2="178"/>
+    <text x="4" y="44">${escapeHtml(money(maxValue))}</text><text x="4" y="113">${escapeHtml(money(maxValue / 2))}</text><text x="4" y="182">R$ 0,00</text>
+    <polyline points="${pointText}" />
+    ${points.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="4"/><title>${escapeHtml(point.key === 'sem-data' ? 'Sem data' : dateLabel(point.key))}: ${escapeHtml(money(point.value))}</title>${index % labelEvery === 0 || index === points.length - 1 ? `<text class="chart-date" x="${point.x}" y="210" text-anchor="middle">${escapeHtml(point.key === 'sem-data' ? '—' : dateLabel(point.key).slice(0, 5))}</text>` : ''}`).join('')}
+  </svg>`;
 }
 
 function renderCst060Tab(docs) {
   const report = state.cst060;
+  const filter = state.readerFilters.cst060;
   return `
-    <div class="panel-heading"><div><h2>Conferência CST 060</h2><p>Compara o ICMS ST retido no XML com o recálculo por item, preservando a regra de 4% para pneus.</p></div></div>
-    <form class="analysis-form compact-form" id="cst060Form">
-      <label>Alíquota interna (%)<input name="rate" type="number" min="0.01" max="100" step="0.01" placeholder="Ex.: 18" required /></label>
-      <button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Conferir CST 060</button>
+    <header class="reference-module-heading"><div><h2>Conferência CST 060</h2><p>Busque uma NF-e carregada para conferir o ICMS ST retido.</p></div><div class="reference-module-actions">${statusPill(`${report?.rows.length || 0} item(ns)`, report?.rows.length ? 'success' : 'neutral')}<button type="button" class="secondary-button" data-action="export-current" ${report?.rows.length ? '' : 'disabled'}>Exportar Excel</button></div></header>
+    <form class="reference-form" id="cst060Form">
+      <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text || '')}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
+      <label class="reference-field span-2">Alíquota interna para o cálculo (%)<input name="rate" type="number" min="0.01" max="100" step="0.01" placeholder="Ex.: 18" value="${escapeHtml(filter.rate || '')}" required /></label>
+      <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Buscar nota e conferir CST 060</button></div>
     </form>
-    ${report ? renderCst060Report(report) : emptyState('Informe a alíquota interna para iniciar a conferência.', 'Pneus aplicam a alíquota fixa de 4%, conforme a regra do módulo original.')}
+    ${report ? renderCst060Report(report) : emptyState('Busque uma nota para iniciar a conferência.', 'O leitor usa a alíquota informada; pneus aplicam a alíquota fixa de 4%.')}
   `;
 }
-
 function renderCst060Report(report) {
-  return `<div class="reader-metrics">${metric('NF-e analisadas', report.notes)}${metric('NF-e com CST 060', report.notesWithItems)}${metric('Itens CST 060', report.rows.length)}${metric('ICMS ST no XML', money(sum(report.rows, (row) => row.retained)))}${metric('ICMS recalculado', money(sum(report.rows, (row) => row.calculated)))}${metric('Diferença', money(sum(report.rows, (row) => row.difference)), 'highlight')}</div>${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>Emissão</th><th>NF-e</th><th>Item</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>Valor produto</th><th>Desconto</th><th>Base</th><th>Alíquota</th><th>ICMS ST XML</th><th>ICMS calculado</th><th>Diferença</th><th>Status</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(row.item.index)}</td><td>${escapeHtml(row.doc.issuer || '-')}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.ncm)}</td><td>${escapeHtml(row.item.cfop)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.discount)}</td><td class="money">${money(row.base)}</td><td>${row.rate}%${row.tire ? ' · pneu' : ''}</td><td class="money">${money(row.retained)}</td><td class="money">${money(row.calculated)}</td><td class="money">${money(row.difference)}</td><td>${badge(row.status, row.status === 'OK' ? 'success' : 'warning')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item com CST 060 foi encontrado.', 'Os XMLs carregados continuam disponíveis nas outras abas.')}`;
+  return `<div class="reader-metrics">${metric('NF-e analisadas', report.notes)}${metric('NF-e com CST 060', report.notesWithItems)}${metric('Itens CST 060', report.rows.length)}${metric('ICMS ST no XML', money(sum(report.rows, (row) => row.retained)))}${metric('ICMS recalculado', money(sum(report.rows, (row) => row.calculated)))}${metric('Diferença', money(sum(report.rows, (row) => row.difference)), 'highlight')}</div>${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>Emissão</th><th>NF-e</th><th>Item</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>Valor produto</th><th>Desconto</th><th>Base</th><th>Alíquota</th><th>ICMS ST XML</th><th>ICMS calculado</th><th>Diferença</th><th>Status</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(row.item.index)}</td><td>${escapeHtml(row.doc.issuer || '-')}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.ncm)}</td><td>${escapeHtml(row.item.cfop)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.discount)}</td><td class="money">${money(row.base)}</td><td>${row.rate}%${row.tire ? ' · pneu' : ''}</td><td class="money">${money(row.retained)}</td><td class="money">${money(row.calculated)}</td><td class="money">${money(row.difference)}</td><td>${badge(row.status, row.status === 'OK' ? 'success' : 'warning')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item com CST 060 foi encontrado.', 'Os XMLs carregados continuam disponíveis nos outros leitores.')}`;
 }
 
 function renderToolbar(key, title, resultLabel, total) {
@@ -468,33 +836,44 @@ function parseNfse(document, fileName, xml) {
   const service = first(document, ['serv', 'Servico', 'Valores', 'valores']);
   const serviceValues = first(document, ['vServPrest', 'Valores', 'valores']);
   const key = extractAccessKey(text(document, ['chaveAcesso', 'ChaveAcesso', 'chNFSe']) || attribute(document, ['infNFSe', 'infNfse'], 'Id'), 50);
-  const pisValue = numeric(text(document, ['vRetPIS', 'vPIS', 'ValorPIS']));
-  const cofinsValue = numeric(text(document, ['vRetCOFINS', 'vCOFINS', 'ValorCOFINS']));
-  const inssValue = numeric(text(document, ['vRetINSS', 'vINSS', 'ValorINSS']));
-  const irrfValue = numeric(text(document, ['vRetIRRF', 'vIRRF', 'ValorIR']));
-  const csllValue = numeric(text(document, ['vRetCSLL', 'vCSLL', 'ValorCSLL']));
-  const withheldValue = pisValue + cofinsValue + inssValue + irrfValue + csllValue;
+  const pisRetainedValue = numeric(text(document, ['vRetPIS', 'ValorPISRetido']));
+  const cofinsRetainedValue = numeric(text(document, ['vRetCOFINS', 'ValorCOFINSRetido']));
+  const inssRetainedValue = numeric(text(document, ['vRetINSS', 'ValorINSSRetido']));
+  const irrfRetainedValue = numeric(text(document, ['vRetIRRF', 'ValorIRRetido']));
+  const csllRetainedValue = numeric(text(document, ['vRetCSLL', 'ValorCSLLRetido']));
+  const pisValue = numeric(text(document, ['vPIS', 'ValorPIS'])) || pisRetainedValue;
+  const cofinsValue = numeric(text(document, ['vCOFINS', 'ValorCOFINS'])) || cofinsRetainedValue;
+  const inssValue = numeric(text(document, ['vINSS', 'ValorINSS'])) || inssRetainedValue;
+  const irrfValue = numeric(text(document, ['vIRRF', 'ValorIR'])) || irrfRetainedValue;
+  const csllValue = numeric(text(document, ['vCSLL', 'ValorCSLL'])) || csllRetainedValue;
+  const federalWithheldValue = pisRetainedValue + cofinsRetainedValue + inssRetainedValue + irrfRetainedValue + csllRetainedValue;
   const status = text(document, ['status', 'Situacao', 'cStat']);
   const serviceValue = numeric(text(serviceValues, ['vServ', 'ValorServicos', 'valorServico']) || text(document, ['vServ', 'ValorServicos', 'valorServico']));
-  const netValue = numeric(text(document, ['vLiq', 'ValorLiquidoNfse', 'ValorLiquido'])) || Math.max(0, serviceValue - withheldValue - numeric(text(document, ['vISSRet', 'ValorIssRetido'])));
+  const issValue = numeric(text(document, ['vISSQN', 'vISS', 'valorIss', 'ValorIss', 'ValorISS']));
+  const issRetainedValue = numeric(text(document, ['vISSRet', 'vISSRetido', 'ValorIssRetido', 'ValorISSRetido', 'ValorISSQNRetido']));
+  const discountValue = numeric(text(document, ['vDescIncond', 'ValorDescontoIncondicionado'])) + numeric(text(document, ['vDescCond', 'ValorDescontoCondicionado', 'vDeducao', 'ValorDeducoes']));
+  const withheldValue = federalWithheldValue + issRetainedValue;
+  const netValue = numeric(text(document, ['vLiq', 'ValorLiquidoNfse', 'ValorLiquido'])) || Math.max(0, serviceValue - withheldValue);
   const rawRetention = text(document, ['tpRetISSQN', 'IssRetido', 'issRetido']);
-  const issRetention = ['1', 'true', 'sim'].includes(normalize(rawRetention)) ? 'Retido' : ['2', 'false', 'nao'].includes(normalize(rawRetention)) ? 'Não retido' : rawRetention;
+  const issRetention = ['1', 'true', 'sim'].includes(normalize(rawRetention)) || issRetainedValue > 0 ? 'Retido' : ['2', 'false', 'nao'].includes(normalize(rawRetention)) || rawRetention ? 'Não retido' : '—';
+  const issRate = numeric(text(document, ['pAliqAplic', 'pAliq', 'aliquotaIss', 'aliquotaISS']));
   return {
     kind: 'nfse', id: `nfse-${key || nextFileId}`, fileName, xml, key,
     number: text(document, ['numeroNFSe', 'numeroNfse', 'nNFSe', 'Numero', 'NumeroNfse']) || '-',
     issuedAt: text(document, ['dataEmissao', 'DataEmissao', 'dhEmi', 'dhProc']),
     issuer: text(issuer, ['xNome', 'razaoSocial', 'RazaoSocial', 'Nome']), issuerCnpj: digits(text(issuer, ['CNPJ', 'cnpj', 'CpfCnpj', 'CPF'])),
     taker: text(taker, ['xNome', 'razaoSocial', 'RazaoSocial', 'Nome']), takerCnpj: digits(text(taker, ['CNPJ', 'cnpj', 'CpfCnpj', 'CPF'])),
-    serviceLocation: text(document, ['xLocPrestacao', 'localPrestacao']), issIncidence: text(document, ['xLocIncid', 'localIncidenciaIss']),
+    serviceLocation: text(document, ['xLocPrestacao', 'xMunLocPrestacao', 'localPrestacao', 'cLocPrestacao']), issIncidence: text(document, ['xLocIncid', 'localIncidenciaIss', 'cLocIncid']),
     takerMunicipality: text(taker, ['xMun', 'xMunicipio', 'Municipio']),
     serviceCode: text(document, ['cTribNac', 'cTribMun', 'ItemListaServico', 'itemListaServico']),
     serviceDescription: text(service, ['xDescServ', 'Discriminacao', 'descricaoServico']) || text(document, ['xDescServ', 'Discriminacao', 'descricaoServico']),
-    serviceValue, netValue,
-    issValue: numeric(text(document, ['vISSQN', 'vISS', 'valorIss', 'ValorIss', 'ValorISS'])),
+    serviceValue, netValue, discountValue,
+    issValue, issRetainedValue,
     pisValue, cofinsValue, inssValue, irrfValue, csllValue,
-    issRetention,
-    issRate: numeric(text(document, ['pAliqAplic', 'pAliq', 'aliquotaIss', 'aliquotaISS'])),
-    withheldValue, status, cancelled: /cancel/i.test(status)
+    issRetention, federalRetention: federalWithheldValue > 0 ? 'Retido' : 'Não retido',
+    issRate, actualIssRate: serviceValue ? issRetainedValue / serviceValue * 100 : issRate,
+    federalWithheldValue, withheldValue, status, cancelled: /cancel/i.test(status),
+    processingError: !text(document, ['numeroNFSe', 'numeroNfse', 'nNFSe', 'Numero', 'NumeroNfse']) && !key ? 'Número/chave não identificados' : ''
   };
 }
 
@@ -525,15 +904,12 @@ function filterRows(rows, key, getText) {
 }
 
 function calculateDifal(form) {
-  const recipient = String(form.get('recipient') || '');
   const rate = numeric(form.get('rate'));
-  const start = String(form.get('start') || '');
-  const end = String(form.get('end') || '');
-  if (!recipient || !(rate > 0 && rate < 100) || (start && end && start > end)) {
-    state.errors = ['Informe um CNPJ destinatário, uma alíquota entre 0 e 100% e um período válido.'];
+  if (!(rate > 0 && rate < 100)) {
+    state.errors = ['Informe uma alíquota interna entre 0 e 100%.'];
     return;
   }
-  const docs = getDocuments().filter((doc) => doc.kind === 'nfe' && doc.recipientCnpj === digits(recipient) && isInRange(doc.issuedAt, start, end));
+  const docs = filterNfeDocs(getDocuments().filter((doc) => doc.kind === 'nfe'), { text: String(form.get('text') || '') });
   const rows = docs.flatMap((doc) => doc.items.map((item) => {
     const base = numeric(item.baseCalculoIcmsRaw);
     const aliquota = numeric(item.aliquotaIcmsRaw);
@@ -552,7 +928,6 @@ function calculateDifal(form) {
   };
   state.errors = [];
 }
-
 function calculateDifalPorDentro(base, interstateRate, internalRate) {
   const internal = internalRate / 100;
   if (!(internal < 1)) return 0;
@@ -567,7 +942,7 @@ function calculateCst060(form) {
     state.errors = ['Informe uma alíquota interna válida.'];
     return;
   }
-  const docs = getDocuments().filter((doc) => doc.kind === 'nfe');
+  const docs = filterNfeDocs(getDocuments().filter((doc) => doc.kind === 'nfe'), { text: String(form.get('text') || '') });
   const rows = docs.flatMap((doc) => doc.items.filter((item) => String(item.cstCsosn).trim() === '60').map((item) => {
     const tire = /\bPNEU(?:S|MATICO|MATICOS)?\b/i.test(item.description.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
     const appliedRate = tire ? 4 : rate;
@@ -582,37 +957,44 @@ function calculateCst060(form) {
   state.cst060 = { notes: docs.length, notesWithItems: new Set(rows.map((row) => row.doc.id)).size, rows };
   state.errors = [];
 }
-
 function findItemValue(xml, itemIndex, tag) {
   const document = new DOMParser().parseFromString(xml, 'application/xml');
   const detail = findXmlElementsByLocalName(document, 'det')[Number(itemIndex) - 1];
   return getXmlText(detail, tag);
 }
 
-function exportCurrentTab() {
-  const docs = getDocuments();
+function exportCurrentReader() {
+  const allDocs = getDocuments();
+  const docs = state.activeReader === 'nfe' && state.readerFilters.nfe.hasSearched
+    ? filterNfeDocs(allDocs.filter((doc) => doc.kind === 'nfe'), state.readerFilters.nfe)
+    : state.activeReader === 'nfse' && state.readerFilters.nfse.hasSearched
+      ? filterNfseDocs(allDocs.filter((doc) => doc.kind === 'nfse'), state.readerFilters.nfse)
+      : allDocs;
   let headers = [];
   let rows = [];
-  if (state.activeTab === 'nfe') {
+  if (state.activeReader === 'nfe') {
     headers = ['NF-e', 'Status', 'Emissão', 'Emitente', 'CNPJ', 'Produto', 'NCM', 'CFOP', 'CST', 'Quantidade', 'Valor produto', 'Base ICMS', 'Alíquota', 'ICMS', 'ICMS ST retido', 'ICMS monofásico'];
-    rows = docs.filter((doc) => doc.kind === 'nfe').flatMap(nfeRows).map((row) => [row.number, isCancelled(row.doc) ? 'Cancelada' : 'Ativa', row.doc.issuedAt, row.issuer, row.issuerCnpj, row.product, row.ncm, row.cfop, row.cst, row.quantity, row.productValue, row.baseIcms, row.aliquota, row.icms, row.icmsSt, row.icmsMono]);
-  } else if (state.activeTab === 'cte') {
+    let itemRows = docs.filter((doc) => doc.kind === 'nfe').flatMap(nfeRows);
+    rows = itemRows.map((row) => [row.number, isCancelled(row.doc) ? 'Cancelada' : 'Ativa', row.doc.issuedAt, row.issuer, row.issuerCnpj, row.product, row.ncm, row.cfop, row.cst, row.quantity, row.productValue, row.baseIcms, row.aliquota, row.icms, row.icmsSt, row.icmsMono]);
+  } else if (state.activeReader === 'cte') {
     headers = ['CT-e', 'Emissão', 'Chave', 'Emitente', 'Serviço', 'Valor'];
     rows = docs.filter((doc) => doc.kind === 'cte').map((doc) => [doc.number, doc.issuedAt, doc.key, doc.issuer, doc.service.productLabel, doc.total]);
-  } else if (state.activeTab === 'nfse') {
-    headers = ['NFS-e', 'Status', 'Emissão', 'Local prestação', 'Incidência ISS', 'Prestador', 'CNPJ prestador', 'Tomador', 'Município tomador', 'CNPJ tomador', 'Valor líquido', 'Retenções', 'Serviço', 'ISS', 'PIS', 'COFINS', 'INSS', 'IRRF', 'CSLL', 'ISS retido', 'Alíquota ISS', 'Código', 'Descrição'];
-    rows = docs.filter((doc) => doc.kind === 'nfse').map((doc) => [doc.number, doc.status || (doc.cancelled ? 'Cancelada' : 'Lida'), doc.issuedAt, doc.serviceLocation, doc.issIncidence, doc.issuer, doc.issuerCnpj, doc.taker, doc.takerMunicipality, doc.takerCnpj, doc.netValue, doc.withheldValue, doc.serviceValue, doc.issValue, doc.pisValue, doc.cofinsValue, doc.inssValue, doc.irrfValue, doc.csllValue, doc.issRetention, doc.issRate, doc.serviceCode, doc.serviceDescription]);
-  } else if (state.activeTab === 'difal' && state.difal) {
+  } else if (state.activeReader === 'nfse') {
+    const definitions = new Map(getNfseFiscalColumns().map((column) => [column.key, column]));
+    const columns = state.nfseTable.columnOrder.map((key) => definitions.get(key)).filter((column) => column && !state.nfseTable.hiddenColumns.has(column.key));
+    const nfseDocs = sortNfseFiscalDocuments(docs.filter((doc) => doc.kind === 'nfse'));
+    headers = columns.map((column) => column.label);
+    rows = nfseDocs.map((doc) => columns.map((column) => column.value(doc)));
+  } else if (state.activeReader === 'difal' && state.difal) {
     headers = ['NF-e', 'Emissão', 'Produto', 'CST', 'Base ICMS', 'Alíquota', 'ICMS', 'ICMS mono XML', 'DIFAL', 'Situação'];
     rows = state.difal.rows.map((row) => [row.doc.number, row.doc.issuedAt, row.item.description, row.item.cstCsosn, row.base, row.rate, row.icms, row.mono, row.difal ?? '', isCancelled(row.doc) ? 'Cancelada' : 'Ativa']);
-  } else if (state.activeTab === 'cst060' && state.cst060) {
+  } else if (state.activeReader === 'cst060' && state.cst060) {
     headers = ['Emissão', 'NF-e', 'Item', 'Emitente', 'Produto', 'NCM', 'CFOP', 'Valor produto', 'Desconto', 'Base', 'Alíquota', 'ICMS ST XML', 'ICMS calculado', 'Diferença', 'Status'];
     rows = state.cst060.rows.map((row) => [row.doc.issuedAt, row.doc.number, row.item.index, row.doc.issuer, row.item.description, row.item.ncm, row.item.cfop, row.productValue, row.discount, row.base, row.rate, row.retained, row.calculated, row.difference, row.status]);
   }
   if (!rows.length) return;
   const table = `<table><thead><tr>${headers.map((value) => `<th>${escapeHtml(value)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((value) => `<td>${escapeHtml(value ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  downloadText(`leitor-xml-3-${state.activeTab}.xls`, `\ufeff<html><head><meta charset="utf-8"></head><body>${table}</body></html>`, 'application/vnd.ms-excel;charset=utf-8');
-  recordOperation('Planilha exportada', `Aba ${tabLabels.find(([key]) => key === state.activeTab)?.[1] || state.activeTab}`);
+  downloadText(`leitor-xml-3-${state.activeReader}.xls`, `\ufeff<html><head><meta charset="utf-8"></head><body>${table}</body></html>`, 'application/vnd.ms-excel;charset=utf-8');
 }
 
 function sum(rows, getValue) { return rows.reduce((total, row) => total + (Number(getValue(row)) || 0), 0); }
@@ -624,13 +1006,13 @@ function dateTimeLabel(value) { const date = value ? new Date(value) : null; ret
 function digits(value) { return String(value || '').replace(/\D/g, ''); }
 function normalize(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function isCancelled(doc) { return isXmlReader30DocumentCancelled({ ...doc, status: doc.cancelled ? 'cancelada' : 'ativa' }); }
-function isInRange(value, start, end) { const day = dateKey(value); return (!start && !end) || (Boolean(day) && (!start || day >= start) && (!end || day <= end)); }
 function dateKey(value) { const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/); if (match) return match[1]; const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : ''; }
 function extractAccessKey(value, length) { const found = digits(value).match(new RegExp(`\\d{${length}}`)); return found?.[0] || ''; }
 function formatBytes(value) { if (value < 1024) return `${value} B`; if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`; return `${(value / 1024 / 1024).toFixed(1)} MB`; }
 function emptyState(title, subtitle) { return `<div class="reader-empty"><span class="empty-mark" aria-hidden="true">XML</span><strong>${escapeHtml(title)}</strong>${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ''}</div>`; }
 function metric(label, value, tone = '') { return `<article class="metric-card ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`; }
 function badge(label, tone) { return `<span class="reader-badge ${tone}">${escapeHtml(label)}</span>`; }
+function limitDisplayText(value, maxLength) { const characters = Array.from(String(value ?? '')); return characters.length > maxLength ? `${characters.slice(0, maxLength - 1).join('').trimEnd()}…` : characters.join(''); }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
 function downloadText(fileName, content, type) { const url = URL.createObjectURL(new Blob([content], { type })); const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url); }
 function first(root, names) { for (const name of names) { const node = findXmlElementsByLocalName(root, name)[0]; if (node) return node; } return root; }

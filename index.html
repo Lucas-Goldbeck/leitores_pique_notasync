@@ -24,7 +24,8 @@
     </script>
   </head>
   <body>
-    <div class="app-shell">
+    <div id="authRoot"></div>
+    <div class="app-shell" id="appShell" hidden>
       <aside class="sidebar" aria-label="Identidade NotaSync">
         <div class="brand">
           <img
@@ -42,19 +43,44 @@
         </div>
 
         <nav class="sidebar-nav" aria-label="Menu principal">
-          <button class="side-nav-link" type="button" data-app-view="dashboard" title="Dashboard" aria-current="page">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="3.5" width="7" height="4" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="10.5" width="7" height="10" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
-            <span>Dashboard</span>
-          </button>
-          <button class="side-nav-link" type="button" data-app-view="reader" title="Leitor XML 3.0">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 3.5h7l4 4v13h-11a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 3.8v4h4M8 12h8M8 16h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            <span>Leitor XML 3.0</span>
+          <div class="sidebar-nav-group" aria-label="Leitores XML">
+            <button class="side-nav-link" type="button" data-reader="nfe" title="NF-e" aria-label="Leitor NF-e" aria-current="page">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 3.5h7l4 4v13h-11a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 3.8v4h4M8 12h8M8 16h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span>NF-e</span>
+            </button>
+            <button class="side-nav-link" type="button" data-reader="nfse" title="NFS-e fiscal" aria-label="Leitor NFS-e fiscal">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 20V5.5A2 2 0 0 1 6 3.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 4v4h4M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span>NFS-e fiscal</span>
+            </button>
+            <button class="side-nav-link" type="button" data-reader="difal" title="DIFAL" aria-label="Leitor DIFAL">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19.5h16M6 16l4-4 3 2 5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h3v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>DIFAL</span>
+            </button>
+            <button class="side-nav-link" type="button" data-reader="cst060" title="CST 060" aria-label="Leitor CST 060">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 8 3v5.5c0 4.7-3.2 7.8-8 9.5-4.8-1.7-8-4.8-8-9.5V6l8-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.5 12 2.3 2.3 4.8-4.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>CST 060</span>
+            </button>
+          </div>
+          <button class="side-nav-link" id="settingsNav" type="button" title="Configurações" aria-label="Configurações" hidden>
+            <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 2.8h4l.55 2.12c.59.17 1.15.4 1.66.69l2.02-.77 2 3.46-1.48 1.61a7.3 7.3 0 0 1 0 1.92l1.48 1.61-2 3.46-2.02-.77c-.51.29-1.07.52-1.66.69L14 19h-4l-.55-2.12a7.3 7.3 0 0 1-1.66-.69l-2.02.77-2-3.46 1.48-1.61a7.3 7.3 0 0 1 0-1.92L3.77 8.3l2-3.46 2.02.77c.51-.29 1.07-.52 1.66-.69L10 2.8Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="11.3" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg>
+            <span>Configurações</span>
           </button>
         </nav>
 
         <div class="sidebar-bottom">
+          <div class="auth-user-card" id="authUserCard" hidden>
+            <div class="auth-user-avatar" id="authUserInitials" aria-hidden="true">NS</div>
+            <div class="auth-user-copy"><strong id="authUserName"></strong><span id="authUserRole"></span></div>
+            <button class="auth-logout-button" id="authLogoutButton" type="button">Sair</button>
+          </div>
+          <div class="sidebar-caption">NotaSync <span aria-hidden="true">·</span> GCONT</div>
+        </div>
+      </aside>
+
+      <main class="workspace" aria-label="Leitor XML">
+        <div class="workspace-topbar">
           <button
-            class="theme-toggle"
+            class="theme-toggle theme-toggle-top"
             id="themeToggle"
             type="button"
             aria-label="Alternar para tema escuro"
@@ -69,12 +95,9 @@
               <path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          <div class="sidebar-caption">NotaSync <span aria-hidden="true">·</span> GCONT</div>
         </div>
-      </aside>
-
-      <main class="workspace" aria-label="Leitor XML">
         <div class="reader-mount" id="readerMount"></div>
+        <div class="settings-mount" id="settingsMount" hidden></div>
       </main>
     </div>
     <script type="module" src="./app.js"></script>

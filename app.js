@@ -1,4 +1,5 @@
 import { mountXmlReader30 } from './modules/xml-reader30/reader.js';
+import { mountAuthAccess } from './modules/auth/auth.js';
 
 (() => {
   const storageKey = 'gcont:theme:v1';
@@ -35,4 +36,11 @@ import { mountXmlReader30 } from './modules/xml-reader30/reader.js';
   });
 
   mountXmlReader30(document.getElementById('readerMount'));
+  mountAuthAccess({
+    authRoot: document.getElementById('authRoot'),
+    appShell: document.getElementById('appShell'),
+    readerMount: document.getElementById('readerMount'),
+    settingsMount: document.getElementById('settingsMount'),
+    settingsNav: document.getElementById('settingsNav')
+  });
 })();
