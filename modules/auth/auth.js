@@ -150,7 +150,6 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsNav.hidden = auth.user.role !== 'admin';
     const name = auth.user.nome || auth.user.username || 'Usuário';
     const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'NS';
-    document.getElementById('brandSubtitle').textContent = name;
     document.getElementById('authUserName').textContent = name;
     document.getElementById('authUserRole').textContent = roleLabel(auth.user.role);
     document.getElementById('authUserInitials').textContent = initials;

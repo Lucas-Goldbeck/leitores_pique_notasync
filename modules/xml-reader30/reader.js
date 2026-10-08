@@ -512,7 +512,7 @@ function renderReaderPage(root) {
   root.innerHTML = `
     <section class="reader-page">
       <header class="reader-heading">
-        <span class="reader-kicker">GCONT GESTÃO CONTÁBIL · LEITOR XML 3.0</span>
+        <span class="reader-kicker">CONFERÊNCIA FISCAL · LEITOR XML 3.0</span>
         <div class="reader-title-line"><h1>${escapeHtml(activeReaderLabel)}</h1><span class="reader-functional-badge">Funcional</span></div>
         <p>${escapeHtml(readerPageDescriptions[state.activeReader] || readerPageDescriptions.nfe)} Os XMLs são processados neste computador; a geração da DANFE usa o servidor local.</p>
       </header>
