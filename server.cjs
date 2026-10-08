@@ -70,6 +70,11 @@ const server = http.createServer((request, response) => {
     return;
   }
 
+  if (/^\/(?:\.env(?:\..*)?|easypanel\.env(?:\..*)?)$/i.test(requestUrl.pathname)) {
+    response.writeHead(404).end('Not found');
+    return;
+  }
+
   const requestedPath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
   const filePath = path.resolve(root, `.${requestedPath}`);
   const relativePath = path.relative(root, filePath);
@@ -735,9 +740,7 @@ async function closeDatabaseSession(session, reason) {
 function requireTls(connectionString) {
   const url = new URL(connectionString);
   const sslMode = (url.searchParams.get('sslmode') || '').toLowerCase();
-  if (!['require', 'verify-ca', 'verify-full'].includes(sslMode)) {
-    url.searchParams.set('sslmode', 'require');
-  }
+  if (sslMode !== 'verify-full') url.searchParams.set('sslmode', 'verify-full');
   return url.toString();
 }
 
