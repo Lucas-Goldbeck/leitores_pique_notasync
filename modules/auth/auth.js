@@ -150,6 +150,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsNav.hidden = auth.user.role !== 'admin';
     const name = auth.user.nome || auth.user.username || 'Usuário';
     const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'NS';
+    document.getElementById('brandSubtitle').textContent = name;
     document.getElementById('authUserName').textContent = name;
     document.getElementById('authUserRole').textContent = roleLabel(auth.user.role);
     document.getElementById('authUserInitials').textContent = initials;
@@ -312,7 +313,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   function renderResetPasswordDialog(user) {
     return `<div class="settings-modal-backdrop" role="presentation"><section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="resetPasswordTitle">
       <h2 id="resetPasswordTitle">Redefinir senha</h2><p>Nova senha para <strong>${escapeHtml(user.username)}</strong>. As sessões anteriores serão encerradas.</p>
-      <form id="resetAccessPasswordForm"><label class="auth-field">Nova senha<input name="password" type="password" autocomplete="new-password" required autofocus /></label><div class="settings-modal-actions"><button class="settings-secondary-button" type="button" data-action="cancel-reset">Cancelar</button><button class="auth-primary-button" type="submit">Salvar senha</button></div></form>
+      <form id="resetAccessPasswordForm"><label class="auth-field">Nova senha<input name="password" type="password" autocomplete="new-password" required autofocus /></label><label class="auth-field">Confirmar senha<input name="passwordConfirmation" type="password" autocomplete="new-password" required /></label><div class="settings-modal-actions"><button class="settings-secondary-button" type="button" data-action="cancel-reset">Cancelar</button><button class="auth-primary-button" type="submit">Salvar senha</button></div></form>
     </section></div>`;
   }
 
@@ -357,7 +358,14 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       if (!settings.resetUser) return;
       const actingAdminId = auth.user.userId;
       const user = settings.resetUser;
-      const password = String(new FormData(event.target).get('password') || '');
+      const formData = new FormData(event.target);
+      const password = String(formData.get('password') || '');
+      const passwordConfirmation = String(formData.get('passwordConfirmation') || '');
+      if (password !== passwordConfirmation) {
+        settings.error = 'As senhas devem ser iguais.';
+        renderSettings();
+        return;
+      }
       try {
         await apiRequest(`/auth/usuarios/${encodeURIComponent(user.id)}/reset-password`, {
           method: 'POST',

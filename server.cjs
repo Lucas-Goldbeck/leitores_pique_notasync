@@ -433,9 +433,11 @@ function resetUserPassword(response, userId, body) {
     sendJson(response, 400, { message: 'Informe uma nova senha.' });
     return;
   }
+  const now = new Date().toISOString();
   user.passwordSalt = crypto.randomBytes(16).toString('hex');
   user.passwordHash = hashPassword(password, user.passwordSalt);
-  user.updatedAt = new Date().toISOString();
+  user.passwordChangedAt = now;
+  user.updatedAt = now;
   revokeUserSessions(user.id);
   saveUsers();
   sendJson(response, 200, publicUser(user));
@@ -502,13 +504,18 @@ function loadUsers() {
     const parsed = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
     if (!Array.isArray(parsed.users)) throw new Error(`Arquivo de usuários inválido: ${usersFile}`);
     for (const user of parsed.users) user.tempoLogadoMs = normalizeLoggedDuration(user.tempoLogadoMs);
+    if (process.env.ADMIN_RESET_PASSWORD !== undefined) resetAdminPassword(parsed.users);
     return parsed.users;
   }
 
-  const username = normalizeUsername(process.env.ADMIN_USERNAME || 'admin');
+  if (process.env.ADMIN_RESET_PASSWORD !== undefined && !process.env.ADMIN_RESET_PASSWORD) {
+    throw new Error('ADMIN_RESET_PASSWORD cannot be empty.');
+  }
+  const username = normalizeUsername(process.env.ADMIN_RESET_USERNAME || process.env.ADMIN_USERNAME || 'admin');
   if (!/^[a-z0-9._-]{3,80}$/i.test(username)) throw new Error('ADMIN_USERNAME inválido.');
-  const generatedPassword = !process.env.ADMIN_PASSWORD;
-  const initialPassword = generatedPassword ? crypto.randomBytes(24).toString('base64url') : process.env.ADMIN_PASSWORD;
+  const configuredPassword = process.env.ADMIN_RESET_PASSWORD || process.env.ADMIN_PASSWORD;
+  const generatedPassword = !configuredPassword;
+  const initialPassword = generatedPassword ? crypto.randomBytes(24).toString('base64url') : configuredPassword;
   const now = new Date().toISOString();
   const passwordSalt = crypto.randomBytes(16).toString('hex');
   const admin = {
@@ -531,7 +538,32 @@ function loadUsers() {
   } else {
     process.stdout.write(`Usuário administrador criado: ${username}\nArquivo local: ${usersFile}\n`);
   }
+  if (process.env.ADMIN_RESET_PASSWORD !== undefined) {
+    delete process.env.ADMIN_RESET_PASSWORD;
+    process.stdout.write('ADMIN_RESET_PASSWORD applied. Remove the variable from the service environment.\n');
+  }
   return seededUsers;
+}
+
+function resetAdminPassword(userEntries) {
+  const password = process.env.ADMIN_RESET_PASSWORD;
+  if (!password) throw new Error('ADMIN_RESET_PASSWORD cannot be empty.');
+
+  const username = normalizeUsername(process.env.ADMIN_RESET_USERNAME || process.env.ADMIN_USERNAME || 'admin');
+  const user = userEntries.find((entry) => entry.username === username && entry.role === 'admin');
+  if (!user) throw new Error(`Admin account "${username}" not found. Set ADMIN_RESET_USERNAME to the correct username.`);
+
+  const now = new Date().toISOString();
+  user.passwordSalt = crypto.randomBytes(16).toString('hex');
+  user.passwordHash = hashPassword(password, user.passwordSalt);
+  user.passwordChangedAt = now;
+  user.updatedAt = now;
+
+  const temporaryFile = `${usersFile}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryFile, JSON.stringify({ users: userEntries }, null, 2), { mode: 0o600 });
+  fs.renameSync(temporaryFile, usersFile);
+  delete process.env.ADMIN_RESET_PASSWORD;
+  process.stdout.write(`Admin password reset for "${username}". Remove ADMIN_RESET_PASSWORD from the service environment.\n`);
 }
 
 function saveUsers() {

@@ -26,6 +26,16 @@ O projeto já inclui `Dockerfile` e `.dockerignore`. O container escuta na porta
 
 Configure backups para o volume `/data` no EasyPanel para preservar as contas em caso de falha do servidor.
 
+## Recuperar a senha do administrador
+
+Se perder o acesso, use a redefinição de inicialização para alterar a senha sem editar `/data/users.json` enquanto o servidor está rodando:
+
+1. Atualize o serviço para esta versão do projeto.
+2. Em **Environment**, defina `ADMIN_RESET_PASSWORD` com a nova senha. Se o usuário administrador tiver sido renomeado, defina também `ADMIN_RESET_USERNAME` com o nome atual da conta.
+3. Faça um deploy. Na inicialização, o servidor atualiza o hash no volume `/data` antes de aceitar logins, preservando as outras contas.
+4. Depois que a inicialização concluir, remova `ADMIN_RESET_PASSWORD` do ambiente e faça outro deploy. Se permanecer configurada, a variável reaplicará essa senha em cada reinicialização.
+5. Entre com o nome configurado e a nova senha.
+
 ## Observações
 
 - Não remova nem recrie o volume `/data` se quiser manter os usuários cadastrados.
