@@ -1,5 +1,7 @@
 # Leitores Pique NotaSync
 
+Para hospedar com Docker no EasyPanel, siga o guia [EASYPANEL.md](EASYPANEL.md).
+
 Interface do Leitor XML 3.0, com a identidade visual do NotaSync GCONT.
 
 ## Iniciar

@@ -6,7 +6,9 @@ const path = require('node:path');
 const { NFE_GerarDanfe } = require('@nfewizard/danfe');
 
 const root = path.resolve(__dirname);
-const authDirectory = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), 'LeitoresPiqueNotaSync');
+const authDirectory = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), 'LeitoresPiqueNotaSync');
 const usersFile = path.join(authDirectory, 'users.json');
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,6 +35,11 @@ const server = http.createServer((request, response) => {
     requestUrl.pathname = decodeURIComponent(requestUrl.pathname);
   } catch {
     response.writeHead(400).end('Bad request');
+    return;
+  }
+
+  if (requestUrl.pathname === '/healthz' && request.method === 'GET') {
+    sendJson(response, 200, { status: 'ok' });
     return;
   }
 
