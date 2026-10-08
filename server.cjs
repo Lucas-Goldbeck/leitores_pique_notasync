@@ -4,12 +4,26 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { NFE_GerarDanfe } = require('@nfewizard/danfe');
+const { Pool } = require('pg');
 
 const root = path.resolve(__dirname);
 const authDirectory = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), 'LeitoresPiqueNotaSync');
 const usersFile = path.join(authDirectory, 'users.json');
+const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '';
+const databasePool = databaseUrl ? new Pool({
+  connectionString: requireTls(databaseUrl),
+  max: 1,
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  application_name: 'notasync-leitores'
+}) : null;
+if (databasePool) {
+  databasePool.on('error', (error) => {
+    process.stderr.write(`Supabase database connection error: ${error?.message || error}\n`);
+  });
+}
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_AUTH_BODY_BYTES = 1024 * 1024;
@@ -23,9 +37,12 @@ const mimeTypes = {
   '.svg': 'image/svg+xml; charset=utf-8'
 };
 
-const users = loadUsers();
+const users = [];
 const sessions = new Map();
-const sessionTrackingTimer = setInterval(checkpointSessionDurations, 60 * 1000);
+let persistenceQueue = Promise.resolve();
+const sessionTrackingTimer = setInterval(() => {
+  void checkpointSessionDurations();
+}, 60 * 1000);
 sessionTrackingTimer.unref();
 
 const server = http.createServer((request, response) => {
@@ -86,7 +103,7 @@ async function handleNfeDanfeRequest(request, response) {
       return;
     }
 
-    authenticate(request);
+    await authenticate(request);
     const body = await readJsonBody(request, MAX_DANFE_BODY_BYTES);
     const xml = typeof body.xml === 'string' ? body.xml : '';
     if (!xml.trim()) throw authError(400, 'Envie o XML da NF-e para gerar a DANFE.');
@@ -169,23 +186,25 @@ async function handleAuthRequest(request, response, requestUrl) {
   try {
     if (authPath === '/auth/login' && request.method === 'POST') {
       const body = await readJsonBody(request);
-      login(response, body);
+      await login(response, body);
       return;
     }
 
     if (authPath === '/auth/refresh' && request.method === 'POST') {
       const body = await readJsonBody(request);
-      refresh(response, body);
+      await refresh(response, body);
       return;
     }
 
-    const current = authenticate(request);
+    const current = await authenticate(request);
     if (authPath === '/auth/me' && request.method === 'GET') {
       sendJson(response, 200, { user: authenticatedUser(current.user, current.session) });
       return;
     }
 
     if (authPath === '/auth/logout' && request.method === 'POST') {
+      if (accountSessionDuration(current.session, Date.now())) await saveUsers();
+      await closeDatabaseSession(current.session, 'logout');
       sessions.delete(current.session.id);
       response.writeHead(204, { 'Cache-Control': 'no-store' }).end();
       return;
@@ -200,7 +219,7 @@ async function handleAuthRequest(request, response, requestUrl) {
     if (authPath === '/auth/usuarios' && request.method === 'POST') {
       requireAdmin(response, current.user);
       const body = await readJsonBody(request);
-      createUser(response, body);
+      await createUser(response, body);
       return;
     }
 
@@ -208,20 +227,20 @@ async function handleAuthRequest(request, response, requestUrl) {
     if (userRoute && userRoute[2] === 'reset-password' && request.method === 'POST') {
       requireAdmin(response, current.user);
       const body = await readJsonBody(request);
-      resetUserPassword(response, decodeURIComponent(userRoute[1]), body);
+      await resetUserPassword(response, decodeURIComponent(userRoute[1]), body);
       return;
     }
 
     if (userRoute && !userRoute[2] && request.method === 'PATCH') {
       requireAdmin(response, current.user);
       const body = await readJsonBody(request);
-      updateUser(response, current.user, decodeURIComponent(userRoute[1]), body);
+      await updateUser(response, current.user, decodeURIComponent(userRoute[1]), body);
       return;
     }
 
     if (userRoute && !userRoute[2] && request.method === 'DELETE') {
       requireAdmin(response, current.user);
-      deleteUser(response, current.user, decodeURIComponent(userRoute[1]));
+      await deleteUser(response, current.user, decodeURIComponent(userRoute[1]));
       return;
     }
 
@@ -239,7 +258,7 @@ async function handleAuthRequest(request, response, requestUrl) {
   }
 }
 
-function login(response, body) {
+async function login(response, body) {
   const username = normalizeUsername(body.username);
   const password = typeof body.password === 'string' ? body.password : '';
   const user = users.find((entry) => entry.username === username);
@@ -251,34 +270,36 @@ function login(response, body) {
   const now = Date.now();
   user.ultimoLoginAt = new Date(now).toISOString();
   user.updatedAt = user.ultimoLoginAt;
-  saveUsers();
+  await saveUsers();
   const session = createSession(user, now);
+  await saveUsers();
   sendJson(response, 200, authResponse(user, session));
 }
 
-function refresh(response, body) {
+async function refresh(response, body) {
   const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken : '';
   const now = Date.now();
   const session = findSessionByRefreshToken(refreshToken);
   const user = session && users.find((entry) => entry.id === session.userId);
   if (!session || !user || !user.ativo || isSessionExpired(session, now)) {
     if (session) {
-      if (accountSessionDuration(session, now)) saveUsers();
+      if (accountSessionDuration(session, now)) await saveUsers();
+      await closeDatabaseSession(session, 'expired');
       sessions.delete(session.id);
     }
     sendJson(response, 401, { message: 'Sessão expirada. Entre novamente.' });
     return;
   }
 
-  const durationUpdated = accountSessionDuration(session, now);
+  accountSessionDuration(session, now);
   session.accessToken = createToken();
   session.refreshToken = createToken();
   session.lastSeenAt = now;
-  if (durationUpdated) saveUsers();
+  await saveUsers();
   sendJson(response, 200, authResponse(user, session));
 }
 
-function authenticate(request) {
+async function authenticate(request) {
   const header = String(request.headers.authorization || '');
   const match = header.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1]?.trim();
@@ -287,7 +308,8 @@ function authenticate(request) {
   const user = session && users.find((entry) => entry.id === session.userId);
   if (!session || !user || !user.ativo || isSessionExpired(session, now)) {
     if (session) {
-      if (accountSessionDuration(session, now)) saveUsers();
+      if (accountSessionDuration(session, now)) await saveUsers();
+      await closeDatabaseSession(session, 'expired');
       sessions.delete(session.id);
     }
     throw authError(401, 'Sessão inválida ou expirada. Entre novamente.');
@@ -295,7 +317,7 @@ function authenticate(request) {
 
   const durationUpdated = accountSessionDuration(session, now);
   if (request.headers['x-session-activity'] !== 'passive') session.lastSeenAt = now;
-  if (durationUpdated) saveUsers();
+  if (durationUpdated) await saveUsers();
   return { user, session };
 }
 
@@ -306,7 +328,7 @@ function requireAdmin(response, user) {
   }
 }
 
-function createUser(response, body) {
+async function createUser(response, body) {
   const username = normalizeUsername(body.username);
   const password = typeof body.password === 'string' ? body.password : '';
   const role = body.role === 'admin' ? 'admin' : body.role === 'comum' ? 'comum' : '';
@@ -343,11 +365,11 @@ function createUser(response, body) {
     updatedAt: now
   };
   users.push(user);
-  saveUsers();
+  await saveUsers();
   sendJson(response, 201, publicUser(user));
 }
 
-function updateUser(response, actor, userId, body) {
+async function updateUser(response, actor, userId, body) {
   const user = users.find((entry) => entry.id === userId);
   if (!user) {
     sendJson(response, 404, { message: 'Usuário não encontrado.' });
@@ -392,12 +414,12 @@ function updateUser(response, actor, userId, body) {
     user.role = body.role;
   }
   user.updatedAt = new Date().toISOString();
-  if (!user.ativo || user.role !== previousRole) revokeUserSessions(user.id);
-  saveUsers();
+  if (!user.ativo || user.role !== previousRole) await revokeUserSessions(user.id);
+  await saveUsers();
   sendJson(response, 200, publicUser(user));
 }
 
-function deleteUser(response, actor, userId) {
+async function deleteUser(response, actor, userId) {
   const index = users.findIndex((entry) => entry.id === userId);
   if (index < 0) {
     sendJson(response, 404, { message: 'Usuário não encontrado.' });
@@ -408,9 +430,9 @@ function deleteUser(response, actor, userId) {
     sendJson(response, 400, { message: 'Não é possível excluir o último administrador ativo.' });
     return;
   }
-  revokeUserSessions(user.id);
+  await revokeUserSessions(user.id);
   users.splice(index, 1);
-  saveUsers();
+  await saveUsers();
   sendJson(response, 200, { id: user.id, deleted: true, deletedBy: actor.id });
 }
 
@@ -422,7 +444,7 @@ function hasOtherActiveAdmin(excludedUserId) {
   return users.some((entry) => entry.id !== excludedUserId && isActiveAdmin(entry));
 }
 
-function resetUserPassword(response, userId, body) {
+async function resetUserPassword(response, userId, body) {
   const user = users.find((entry) => entry.id === userId);
   const password = typeof body.password === 'string' ? body.password : '';
   if (!user) {
@@ -438,8 +460,8 @@ function resetUserPassword(response, userId, body) {
   user.passwordHash = hashPassword(password, user.passwordSalt);
   user.passwordChangedAt = now;
   user.updatedAt = now;
-  revokeUserSessions(user.id);
-  saveUsers();
+  await revokeUserSessions(user.id);
+  await saveUsers();
   sendJson(response, 200, publicUser(user));
 }
 
@@ -452,7 +474,8 @@ function createSession(user, now) {
     createdAt: now,
     durationAccountedAt: now,
     lastSeenAt: now,
-    expiresAt: now + AUTH_SESSION_LIFETIME_MS
+    expiresAt: now + AUTH_SESSION_LIFETIME_MS,
+    durationMs: 0
   };
   sessions.set(session.id, session);
   return session;
@@ -567,9 +590,155 @@ function resetAdminPassword(userEntries) {
 }
 
 function saveUsers() {
+  fs.mkdirSync(authDirectory, { recursive: true });
   const temporaryFile = `${usersFile}.${process.pid}.tmp`;
   fs.writeFileSync(temporaryFile, JSON.stringify({ users }, null, 2), { mode: 0o600 });
   fs.renameSync(temporaryFile, usersFile);
+  if (!databasePool) return Promise.resolve();
+
+  const snapshot = users.map((user) => ({ ...user }));
+  const nextSave = persistenceQueue.catch(() => {}).then(() => persistDatabaseUsers(snapshot));
+  persistenceQueue = nextSave;
+  return nextSave;
+}
+
+async function initializeAuthStorage() {
+  if (!databasePool) {
+    users.push(...loadUsers());
+    return;
+  }
+
+  fs.mkdirSync(authDirectory, { recursive: true });
+  await databasePool.query(fs.readFileSync(path.join(root, 'supabase', 'schema.sql'), 'utf8'));
+  await databasePool.query(`
+    UPDATE app_private.login_sessions
+    SET ended_at = last_seen_at, end_reason = 'server_restart'
+    WHERE ended_at IS NULL
+  `);
+  const result = await databasePool.query(`
+    SELECT id, username, nome, role, ativo, password_salt, password_hash,
+           ultimo_login_at, tempo_logado_ms, password_changed_at, created_at, updated_at
+    FROM app_private.users
+    ORDER BY created_at, id
+  `);
+
+  if (result.rows.length) {
+    users.push(...result.rows.map(userFromDatabase));
+    if (process.env.ADMIN_RESET_PASSWORD !== undefined) resetAdminPassword(users);
+  } else {
+    users.push(...loadUsers());
+  }
+
+  for (const user of users) user.tempoLogadoMs = normalizeLoggedDuration(user.tempoLogadoMs);
+  await saveUsers();
+  process.stdout.write(`Supabase connected. Loaded ${users.length} user account(s).\n`);
+}
+
+async function persistDatabaseUsers(userEntries) {
+  const client = await databasePool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM app_private.users WHERE id <> ALL($1::uuid[])', [userEntries.map((user) => user.id)]);
+    for (const user of userEntries) {
+      await client.query(`
+        INSERT INTO app_private.users (
+          id, username, nome, role, ativo, password_salt, password_hash,
+          ultimo_login_at, tempo_logado_ms, password_changed_at, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (id) DO UPDATE SET
+          username = EXCLUDED.username,
+          nome = EXCLUDED.nome,
+          role = EXCLUDED.role,
+          ativo = EXCLUDED.ativo,
+          password_salt = EXCLUDED.password_salt,
+          password_hash = EXCLUDED.password_hash,
+          ultimo_login_at = EXCLUDED.ultimo_login_at,
+          tempo_logado_ms = EXCLUDED.tempo_logado_ms,
+          password_changed_at = EXCLUDED.password_changed_at,
+          updated_at = EXCLUDED.updated_at
+      `, [
+        user.id,
+        user.username,
+        user.nome || '',
+        user.role,
+        user.ativo,
+        user.passwordSalt,
+        user.passwordHash,
+        user.ultimoLoginAt || null,
+        normalizeLoggedDuration(user.tempoLogadoMs),
+        user.passwordChangedAt || null,
+        user.createdAt,
+        user.updatedAt
+      ]);
+    }
+    for (const session of sessions.values()) {
+      await client.query(`
+        INSERT INTO app_private.login_sessions (
+          id, user_id, started_at, last_seen_at, expires_at, duration_ms
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE SET
+          last_seen_at = EXCLUDED.last_seen_at,
+          expires_at = EXCLUDED.expires_at,
+          duration_ms = EXCLUDED.duration_ms
+      `, [
+        session.id,
+        session.userId,
+        new Date(session.createdAt),
+        new Date(session.lastSeenAt),
+        new Date(session.expiresAt),
+        normalizeLoggedDuration(session.durationMs)
+      ]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function userFromDatabase(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    nome: row.nome || '',
+    role: row.role,
+    ativo: row.ativo,
+    passwordSalt: row.password_salt,
+    passwordHash: row.password_hash,
+    ultimoLoginAt: row.ultimo_login_at ? new Date(row.ultimo_login_at).toISOString() : null,
+    tempoLogadoMs: normalizeLoggedDuration(row.tempo_logado_ms),
+    passwordChangedAt: row.password_changed_at ? new Date(row.password_changed_at).toISOString() : null,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString()
+  };
+}
+
+async function closeDatabaseSession(session, reason) {
+  if (!databasePool) return;
+  await databasePool.query(`
+    UPDATE app_private.login_sessions
+    SET last_seen_at = $2,
+        duration_ms = $3,
+        ended_at = now(),
+        end_reason = $4
+    WHERE id = $1 AND ended_at IS NULL
+  `, [
+    session.id,
+    new Date(session.lastSeenAt),
+    normalizeLoggedDuration(session.durationMs),
+    reason
+  ]);
+}
+
+function requireTls(connectionString) {
+  const url = new URL(connectionString);
+  const sslMode = (url.searchParams.get('sslmode') || '').toLowerCase();
+  if (!['require', 'verify-ca', 'verify-full'].includes(sslMode)) {
+    url.searchParams.set('sslmode', 'require');
+  }
+  return url.toString();
 }
 
 function hashPassword(password, salt) {
@@ -614,6 +783,7 @@ function accountSessionDuration(session, now) {
 
   user.tempoLogadoMs = normalizeLoggedDuration(user.tempoLogadoMs) + elapsed;
   session.durationAccountedAt = activeUntil;
+  session.durationMs = normalizeLoggedDuration(session.durationMs) + elapsed;
   return true;
 }
 
@@ -633,31 +803,45 @@ function normalizeLoggedDuration(value) {
   return Number.isSafeInteger(duration) && duration > 0 ? duration : 0;
 }
 
-function checkpointSessionDurations() {
+async function checkpointSessionDurations() {
   const now = Date.now();
   let durationUpdated = false;
-  for (const [sessionId, session] of sessions) {
+  const expiredSessions = [];
+  for (const session of sessions.values()) {
     durationUpdated = accountSessionDuration(session, now) || durationUpdated;
-    if (isSessionExpired(session, now)) sessions.delete(sessionId);
+    if (isSessionExpired(session, now)) expiredSessions.push(session);
   }
   if (durationUpdated) {
     try {
-      saveUsers();
+      await saveUsers();
     } catch (error) {
       process.stderr.write(`Could not save login duration: ${error?.message || error}\n`);
     }
   }
+  for (const session of expiredSessions) {
+    try {
+      await closeDatabaseSession(session, 'expired');
+    } catch (error) {
+      process.stderr.write(`Could not close expired login session: ${error?.message || error}\n`);
+    }
+    sessions.delete(session.id);
+  }
 }
 
-function revokeUserSessions(userId) {
+async function revokeUserSessions(userId) {
   let durationUpdated = false;
   const now = Date.now();
-  for (const [sessionId, session] of sessions) {
+  const revokedSessions = [];
+  for (const session of sessions.values()) {
     if (session.userId !== userId) continue;
     durationUpdated = accountSessionDuration(session, now) || durationUpdated;
-    sessions.delete(sessionId);
+    revokedSessions.push(session);
   }
-  if (durationUpdated) saveUsers();
+  if (durationUpdated) await saveUsers();
+  for (const session of revokedSessions) {
+    await closeDatabaseSession(session, 'revoked');
+    sessions.delete(session.id);
+  }
 }
 
 function allowedMethods(authPath) {
@@ -721,6 +905,12 @@ function authError(statusCode, message) {
 
 const port = Number(process.env.PORT) || 4173;
 const host = process.env.HOST || '127.0.0.1';
-server.listen(port, host, () => {
-  process.stdout.write(`Leitor XML disponível em http://${host}:${port}\n`);
+initializeAuthStorage().then(() => {
+  server.listen(port, host, () => {
+    process.stdout.write(`Leitor XML disponível em http://${host}:${port}\n`);
+  });
+}).catch((error) => {
+  process.stderr.write(`Startup failed: ${error?.stack || error}\n`);
+  if (databasePool) void databasePool.end();
+  process.exitCode = 1;
 });

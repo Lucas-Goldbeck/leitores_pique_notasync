@@ -19,12 +19,23 @@ O projeto já inclui `Dockerfile` e `.dockerignore`. O container escuta na porta
 
    Defina `ADMIN_PASSWORD` como um segredo no EasyPanel. Ela é usada somente quando o arquivo de usuários ainda não existe. A conta e os dados são mantidos no volume depois da primeira inicialização.
 
-4. Em **Storage**, crie um volume persistente e monte-o no caminho `/data`.
+4. Faça o deploy. Na inicialização, o servidor cria o schema privado e as tabelas de contas e sessões. Se `app_private.users` estiver vazia e houver `/data/users.json`, as contas existentes são importadas; se não houver arquivo, o administrador inicial é criado.
 5. Em **Domains**, associe o domínio ao serviço usando o protocolo HTTP e a porta interna `4173`. O EasyPanel encaminha o tráfego HTTPS do domínio para essa porta.
-6. Mantenha uma única réplica e desative implantação sem interrupção. As sessões ficam em memória e os usuários são armazenados em um arquivo local, portanto várias instâncias não compartilham uma sessão consistente.
+6. Mantenha uma única réplica e desative implantação sem interrupção. As contas e o histórico de login ficam no Supabase; os tokens das sessões ativas ficam em memória.
 7. Faça o deploy e confira os logs. O endpoint `https://seu-dominio/healthz` deve responder com `{"status":"ok"}`.
 
 Configure backups para o volume `/data` no EasyPanel para preservar as contas em caso de falha do servidor.
+
+## Banco de dados Supabase
+
+O script [schema.sql](supabase/schema.sql) cria as tabelas privadas `app_private.users` e `app_private.login_sessions`. O servidor também executa esse script automaticamente ao iniciar com `DATABASE_URL` configurada.
+
+1. No painel Supabase, abra **Connect** e copie a connection string do **Dedicated pooler** (a opção exibida na sua imagem). A porta `6543` é compatível com esta aplicação.
+2. Troque `[YOUR-PASSWORD]` pela senha do banco. Se ela tiver caracteres especiais, use a versão percent-encoded na URI.
+3. No EasyPanel, adicione `DATABASE_URL` em **Environment** e marque o valor como segredo. Cole a connection string completa. Não coloque-a no código, em arquivos versionados ou no navegador.
+4. Faça o deploy. Na inicialização, o servidor cria o schema privado e as tabelas de contas e sessões. Se `app_private.users` estiver vazia e houver `/data/users.json`, as contas existentes são importadas; se não houver arquivo, o administrador inicial é criado.
+
+O banco armazena contas, hashes de senha, último login, tempo total e histórico por sessão. Os XMLs importados continuam somente no navegador e não são enviados ao Supabase. Os tokens de sessão ativa ficam em memória, por isso mantenha uma única réplica no EasyPanel. O volume `/data` pode continuar ativo como cópia local e fonte de migração.
 
 ## Recuperar a senha do administrador
 
@@ -33,7 +44,7 @@ Se perder o acesso, use a redefinição de inicialização para alterar a senha 
 1. Atualize o serviço para esta versão do projeto.
 2. Em **Environment**, defina `ADMIN_RESET_PASSWORD` com a nova senha. Se o usuário administrador tiver sido renomeado, defina também `ADMIN_RESET_USERNAME` com o nome atual da conta.
 3. Faça um deploy. Na inicialização, o servidor atualiza o hash no volume `/data` antes de aceitar logins, preservando as outras contas.
-4. Depois que a inicialização concluir, remova `ADMIN_RESET_PASSWORD` do ambiente e faça outro deploy. Se permanecer configurada, a variável reaplicará essa senha em cada reinicialização.
+4. Faça o deploy. Na inicialização, o servidor cria o schema privado e as tabelas de contas e sessões. Se `app_private.users` estiver vazia e houver `/data/users.json`, as contas existentes são importadas; se não houver arquivo, o administrador inicial é criado.
 5. Entre com o nome configurado e a nova senha.
 
 ## Observações

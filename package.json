@@ -8,6 +8,7 @@
     "start": "node server.cjs"
   },
   "dependencies": {
-    "@nfewizard/danfe": "1.0.7"
+    "@nfewizard/danfe": "1.0.7",
+    "pg": "^8.23.1"
   }
 }
