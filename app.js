@@ -35,12 +35,13 @@ import { mountAuthAccess } from './modules/auth/auth.js';
     renderTheme();
   });
 
-  mountXmlReader30(document.getElementById('readerMount'));
-  mountAuthAccess({
+  const readerMount = document.getElementById('readerMount');
+  const authAccess = mountAuthAccess({
     authRoot: document.getElementById('authRoot'),
     appShell: document.getElementById('appShell'),
-    readerMount: document.getElementById('readerMount'),
+    readerMount,
     settingsMount: document.getElementById('settingsMount'),
     settingsNav: document.getElementById('settingsNav')
   });
+  mountXmlReader30(readerMount, authAccess?.request);
 })();

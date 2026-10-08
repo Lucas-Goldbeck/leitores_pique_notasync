@@ -261,13 +261,14 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
           <section class="settings-card settings-users-card">
             <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no NotaSync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
             ${settings.loading ? '<div class="settings-empty"><span class="auth-loading-spinner" aria-hidden="true"></span>Carregando usuários…</div>' : settings.users.length ? `
-              <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>
+              <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Tempo logado</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>
                 ${settings.users.map((user) => {
                   const self = user.id === auth.user.userId;
                   return `<tr>
                     <td><strong>${escapeHtml(user.nome || user.username)}</strong><small>${escapeHtml(user.username)}</small></td>
                     <td><span class="settings-role-badge ${user.role === 'admin' ? 'is-admin' : ''}">${escapeHtml(roleLabel(user.role))}</span></td>
                     <td><span class="settings-state ${user.ativo ? 'is-active' : 'is-inactive'}">${user.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                    <td>${escapeHtml(formatDuration(user.tempoLogadoMs))}${user.conectadoAgora ? '<small class="settings-login-live">Conectado agora</small>' : ''}</td>
                     <td>${escapeHtml(formatDate(user.ultimoLoginAt))}</td>
                     <td><div class="settings-row-actions">
                       <button class="settings-secondary-button compact" type="button" data-action="edit-user" data-user-id="${escapeHtml(user.id)}">Editar</button>
@@ -534,9 +535,10 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     }
   }
 
-  async function rawRequest(path, { method = 'GET', body, skipAuth = false } = {}) {
+  async function rawRequest(path, { method = 'GET', body, skipAuth = false, responseType = 'json' } = {}) {
     const headers = { 'X-Session-Activity': 'active' };
     if (!skipAuth && auth.accessToken) headers.Authorization = `Bearer ${auth.accessToken}`;
+    if (responseType === 'blob') headers.Accept = 'application/pdf';
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     let response;
     try {
@@ -550,6 +552,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       throw new Error('A conexão com a API do NotaSync falhou.');
     }
 
+    if (response.ok && responseType === 'blob') return response.blob();
     const responseText = response.status === 204 ? '' : await response.text();
     let payload = null;
     if (responseText) {
@@ -694,6 +697,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     renderLogin({ username, error: 'Sua sessão foi encerrada por inatividade. Entre novamente para continuar.' });
   }
 
+  return { request: apiRequest };
 }
 
 function roleLabel(role) {
@@ -706,6 +710,18 @@ function formatDate(value) {
   if (!value) return 'Nunca';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+
+function formatDuration(value) {
+  const totalMinutes = Math.floor(Math.max(0, Number(value) || 0) / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days} d`);
+  if (hours) parts.push(`${hours} h`);
+  if (minutes || !parts.length) parts.push(`${minutes} min`);
+  return parts.join(' ');
 }
 
 function apiErrorMessage(payload, status) {

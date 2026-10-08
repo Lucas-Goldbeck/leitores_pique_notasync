@@ -4,6 +4,10 @@
   "private": true,
   "description": "Leitor XML 3.0 com processamento local de arquivos fiscais",
   "scripts": {
+    "setup:pdf": "npm rebuild libxmljs2",
     "start": "node server.cjs"
+  },
+  "dependencies": {
+    "@nfewizard/danfe": "1.0.7"
   }
 }

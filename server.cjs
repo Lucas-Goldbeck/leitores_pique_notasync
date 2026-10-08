@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const { NFE_GerarDanfe } = require('@nfewizard/danfe');
 
 const root = path.resolve(__dirname);
 const authDirectory = path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), 'LeitoresPiqueNotaSync');
@@ -10,6 +11,7 @@ const usersFile = path.join(authDirectory, 'users.json');
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_AUTH_BODY_BYTES = 1024 * 1024;
+const MAX_DANFE_BODY_BYTES = 12 * 1024 * 1024;
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -21,6 +23,8 @@ const mimeTypes = {
 
 const users = loadUsers();
 const sessions = new Map();
+const sessionTrackingTimer = setInterval(checkpointSessionDurations, 60 * 1000);
+sessionTrackingTimer.unref();
 
 const server = http.createServer((request, response) => {
   let requestUrl;
@@ -29,6 +33,11 @@ const server = http.createServer((request, response) => {
     requestUrl.pathname = decodeURIComponent(requestUrl.pathname);
   } catch {
     response.writeHead(400).end('Bad request');
+    return;
+  }
+
+  if (requestUrl.pathname === '/api/nfe/danfe') {
+    void handleNfeDanfeRequest(request, response);
     return;
   }
 
@@ -60,6 +69,93 @@ const server = http.createServer((request, response) => {
     fs.createReadStream(filePath).pipe(response);
   });
 });
+
+async function handleNfeDanfeRequest(request, response) {
+  let outputPath = '';
+  try {
+    if (request.method !== 'POST') {
+      response.setHeader('Allow', 'POST');
+      sendJson(response, 405, { message: 'Método não permitido.' });
+      return;
+    }
+
+    authenticate(request);
+    const body = await readJsonBody(request, MAX_DANFE_BODY_BYTES);
+    const xml = typeof body.xml === 'string' ? body.xml : '';
+    if (!xml.trim()) throw authError(400, 'Envie o XML da NF-e para gerar a DANFE.');
+
+    const outputName = `notasync-danfe-${crypto.randomUUID()}.pdf`;
+    outputPath = path.join(os.tmpdir(), outputName);
+    const result = await NFE_GerarDanfe({ data: xml, outputPath });
+    if (result?.success === false) throw authError(422, 'Não foi possível gerar a DANFE com este XML.');
+
+    const pdf = await readCompletedPdf(outputPath);
+    if (!pdf.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+      throw authError(422, 'O gerador não retornou um PDF válido para esta NF-e.');
+    }
+
+    response.writeHead(200, {
+      'Cache-Control': 'no-store',
+      'Content-Length': pdf.length,
+      'Content-Disposition': 'attachment; filename="danfe.pdf"',
+      'Content-Type': 'application/pdf',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    response.end(pdf);
+  } catch (error) {
+    if (response.headersSent) return;
+    const status = Number(error?.statusCode) || 500;
+    const message = status >= 500
+      ? 'Não foi possível gerar a DANFE. Confira se o XML está completo e tente novamente.'
+      : error?.message || 'Não foi possível gerar a DANFE.';
+    sendJson(response, status, { message });
+  } finally {
+    if (outputPath) await fs.promises.unlink(outputPath).catch(() => {});
+  }
+}
+
+async function readCompletedPdf(filePath) {
+  const deadline = Date.now() + 10000;
+  const pdfFooter = Buffer.from('%%EOF');
+  let previousSize = -1;
+  let stableCompletedReads = 0;
+
+  while (Date.now() < deadline) {
+    try {
+      const stats = await fs.promises.stat(filePath);
+      if (stats.size > 8) {
+        const file = await fs.promises.open(filePath, 'r');
+        let tail;
+        try {
+          const tailSize = Math.min(64, stats.size);
+          tail = Buffer.alloc(tailSize);
+          await file.read(tail, 0, tailSize, stats.size - tailSize);
+        } finally {
+          await file.close();
+        }
+
+        if (stats.size === previousSize && tail.includes(pdfFooter)) {
+          stableCompletedReads += 1;
+          if (stableCompletedReads >= 1) {
+            const pdf = await fs.promises.readFile(filePath);
+            if (pdf.length === stats.size && pdf.subarray(0, 5).equals(Buffer.from('%PDF-')) && pdf.subarray(-64).includes(pdfFooter)) {
+              return pdf;
+            }
+          }
+        } else {
+          stableCompletedReads = 0;
+        }
+        previousSize = stats.size;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  throw authError(500, 'O PDF da DANFE não foi concluído a tempo.');
+}
 
 async function handleAuthRequest(request, response, requestUrl) {
   const authPath = requestUrl.pathname.slice('/api'.length);
@@ -159,14 +255,19 @@ function refresh(response, body) {
   const session = findSessionByRefreshToken(refreshToken);
   const user = session && users.find((entry) => entry.id === session.userId);
   if (!session || !user || !user.ativo || isSessionExpired(session, now)) {
-    if (session) sessions.delete(session.id);
+    if (session) {
+      if (accountSessionDuration(session, now)) saveUsers();
+      sessions.delete(session.id);
+    }
     sendJson(response, 401, { message: 'Sessão expirada. Entre novamente.' });
     return;
   }
 
+  const durationUpdated = accountSessionDuration(session, now);
   session.accessToken = createToken();
   session.refreshToken = createToken();
   session.lastSeenAt = now;
+  if (durationUpdated) saveUsers();
   sendJson(response, 200, authResponse(user, session));
 }
 
@@ -178,11 +279,16 @@ function authenticate(request) {
   const now = Date.now();
   const user = session && users.find((entry) => entry.id === session.userId);
   if (!session || !user || !user.ativo || isSessionExpired(session, now)) {
-    if (session) sessions.delete(session.id);
+    if (session) {
+      if (accountSessionDuration(session, now)) saveUsers();
+      sessions.delete(session.id);
+    }
     throw authError(401, 'Sessão inválida ou expirada. Entre novamente.');
   }
 
+  const durationUpdated = accountSessionDuration(session, now);
   if (request.headers['x-session-activity'] !== 'passive') session.lastSeenAt = now;
+  if (durationUpdated) saveUsers();
   return { user, session };
 }
 
@@ -225,6 +331,7 @@ function createUser(response, body) {
     passwordSalt,
     passwordHash: hashPassword(password, passwordSalt),
     ultimoLoginAt: null,
+    tempoLogadoMs: 0,
     createdAt: now,
     updatedAt: now
   };
@@ -294,8 +401,8 @@ function deleteUser(response, actor, userId) {
     sendJson(response, 400, { message: 'Não é possível excluir o último administrador ativo.' });
     return;
   }
-  users.splice(index, 1);
   revokeUserSessions(user.id);
+  users.splice(index, 1);
   saveUsers();
   sendJson(response, 200, { id: user.id, deleted: true, deletedBy: actor.id });
 }
@@ -334,6 +441,7 @@ function createSession(user, now) {
     accessToken: createToken(),
     refreshToken: createToken(),
     createdAt: now,
+    durationAccountedAt: now,
     lastSeenAt: now,
     expiresAt: now + AUTH_SESSION_LIFETIME_MS
   };
@@ -365,6 +473,7 @@ function authenticatedUser(user, session) {
 }
 
 function publicUser(user) {
+  const now = Date.now();
   return {
     id: user.id,
     username: user.username,
@@ -372,6 +481,8 @@ function publicUser(user) {
     role: user.role,
     ativo: user.ativo,
     ultimoLoginAt: user.ultimoLoginAt,
+    tempoLogadoMs: userLoginDuration(user, now),
+    conectadoAgora: [...sessions.values()].some((session) => session.userId === user.id && !isSessionExpired(session, now)),
     passwordChangedAt: user.passwordChangedAt || user.createdAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
@@ -383,6 +494,7 @@ function loadUsers() {
   if (fs.existsSync(usersFile)) {
     const parsed = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
     if (!Array.isArray(parsed.users)) throw new Error(`Arquivo de usuários inválido: ${usersFile}`);
+    for (const user of parsed.users) user.tempoLogadoMs = normalizeLoggedDuration(user.tempoLogadoMs);
     return parsed.users;
   }
 
@@ -401,6 +513,7 @@ function loadUsers() {
     passwordSalt,
     passwordHash: hashPassword(initialPassword, passwordSalt),
     ultimoLoginAt: null,
+    tempoLogadoMs: 0,
     createdAt: now,
     updatedAt: now
   };
@@ -451,10 +564,61 @@ function isSessionExpired(session, now) {
   return session.expiresAt <= now || session.lastSeenAt + AUTH_IDLE_TIMEOUT_MS <= now;
 }
 
-function revokeUserSessions(userId) {
-  for (const [sessionId, session] of sessions) {
-    if (session.userId === userId) sessions.delete(sessionId);
+function accountSessionDuration(session, now) {
+  const user = users.find((entry) => entry.id === session.userId);
+  if (!user) return false;
+
+  const durationAccountedAt = Number.isFinite(session.durationAccountedAt) ? session.durationAccountedAt : session.createdAt;
+  const activeUntil = Math.min(now, session.expiresAt, session.lastSeenAt + AUTH_IDLE_TIMEOUT_MS);
+  const elapsed = Math.max(0, activeUntil - durationAccountedAt);
+  if (!elapsed) return false;
+
+  user.tempoLogadoMs = normalizeLoggedDuration(user.tempoLogadoMs) + elapsed;
+  session.durationAccountedAt = activeUntil;
+  return true;
+}
+
+function userLoginDuration(user, now) {
+  let duration = normalizeLoggedDuration(user.tempoLogadoMs);
+  for (const session of sessions.values()) {
+    if (session.userId !== user.id) continue;
+    const durationAccountedAt = Number.isFinite(session.durationAccountedAt) ? session.durationAccountedAt : session.createdAt;
+    const activeUntil = Math.min(now, session.expiresAt, session.lastSeenAt + AUTH_IDLE_TIMEOUT_MS);
+    duration += Math.max(0, activeUntil - durationAccountedAt);
   }
+  return duration;
+}
+
+function normalizeLoggedDuration(value) {
+  const duration = Number(value);
+  return Number.isSafeInteger(duration) && duration > 0 ? duration : 0;
+}
+
+function checkpointSessionDurations() {
+  const now = Date.now();
+  let durationUpdated = false;
+  for (const [sessionId, session] of sessions) {
+    durationUpdated = accountSessionDuration(session, now) || durationUpdated;
+    if (isSessionExpired(session, now)) sessions.delete(sessionId);
+  }
+  if (durationUpdated) {
+    try {
+      saveUsers();
+    } catch (error) {
+      process.stderr.write(`Could not save login duration: ${error?.message || error}\n`);
+    }
+  }
+}
+
+function revokeUserSessions(userId) {
+  let durationUpdated = false;
+  const now = Date.now();
+  for (const [sessionId, session] of sessions) {
+    if (session.userId !== userId) continue;
+    durationUpdated = accountSessionDuration(session, now) || durationUpdated;
+    sessions.delete(sessionId);
+  }
+  if (durationUpdated) saveUsers();
 }
 
 function allowedMethods(authPath) {
@@ -466,14 +630,14 @@ function allowedMethods(authPath) {
   return 'GET, POST, PATCH';
 }
 
-function readJsonBody(request) {
+function readJsonBody(request, maxBytes = MAX_AUTH_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     let tooLarge = false;
     request.on('data', (chunk) => {
       size += chunk.length;
-      if (size > MAX_AUTH_BODY_BYTES) {
+      if (size > maxBytes) {
         tooLarge = true;
         chunks.length = 0;
         return;

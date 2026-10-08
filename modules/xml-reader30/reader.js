@@ -29,6 +29,7 @@ const state = {
   errors: [],
   search: { nfe: '', cte: '', nfse: '' },
   difal: null,
+  difalChartPeriod: 'day',
   cst060: null,
   modalXml: null,
   selectedNfeItems: new Set(),
@@ -55,7 +56,7 @@ const state = {
 
 let nextFileId = 1;
 
-export function mountXmlReader30(root) {
+export function mountXmlReader30(root, requestApi) {
   if (!root) return;
   document.querySelectorAll('[data-reader]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -67,6 +68,12 @@ export function mountXmlReader30(root) {
   root.addEventListener('change', handleChange);
   root.addEventListener('input', handleInput);
   root.addEventListener('submit', handleSubmit);
+  root.addEventListener('pointerover', handleDifalChartPointerOver);
+  root.addEventListener('pointermove', handleDifalChartPointerMove);
+  root.addEventListener('pointerout', handleDifalChartPointerOut);
+  root.addEventListener('focusin', handleDifalChartFocusIn);
+  root.addEventListener('focusout', handleDifalChartFocusOut);
+  root.addEventListener('keydown', handleDifalChartKeydown);
   root.addEventListener('dragstart', handleNfseColumnDragStart);
   root.addEventListener('dragover', handleNfseColumnDragOver);
   root.addEventListener('drop', handleNfseColumnDrop);
@@ -86,6 +93,21 @@ export function mountXmlReader30(root) {
   render(root);
 
   async function handleClick(event) {
+    const chartPoint = event.target.closest('[data-difal-point]');
+    if (chartPoint) {
+      const wasPinned = chartPoint.hasAttribute('data-pinned');
+      root.querySelectorAll('[data-difal-point][data-pinned]').forEach((point) => point.removeAttribute('data-pinned'));
+      if (!wasPinned) {
+        chartPoint.setAttribute('data-pinned', '');
+        showDifalChartTooltip(chartPoint);
+      } else {
+        hideDifalChartTooltip(chartPoint.closest('.difal-chart-visual'));
+      }
+      return;
+    }
+    root.querySelectorAll('[data-difal-point][data-pinned]').forEach((point) => point.removeAttribute('data-pinned'));
+    root.querySelectorAll('.difal-chart-visual').forEach(hideDifalChartTooltip);
+
     const button = event.target.closest('[data-action]');
     if (!button) {
       if (state.nfseTable.columnMenuKey) {
@@ -121,6 +143,9 @@ export function mountXmlReader30(root) {
         state.modalXml = { title: `${document.number || 'Documento'} · ${document.fileName}`, xml: document.xml };
         render(root);
       }
+    } else if (action === 'view-nfe-pdf') {
+      const document = getDocuments().find((item) => item.id === button.dataset.id && item.kind === 'nfe');
+      if (document) void downloadNfeDanfe(document, requestApi, button);
     } else if (action === 'close-xml') {
       state.modalXml = null;
       render(root);
@@ -173,6 +198,93 @@ export function mountXmlReader30(root) {
       state.nfeFullscreen = action === 'toggle-reader-fullscreen';
       render(root);
     }
+  }
+
+  function handleDifalChartPointerOver(event) {
+    const point = event.target.closest('[data-difal-point]');
+    if (point) showDifalChartTooltip(point);
+  }
+
+  function handleDifalChartPointerOut(event) {
+    const visual = event.target.closest('.difal-chart-visual');
+    if (!visual || event.relatedTarget?.closest?.('.difal-chart-visual') === visual) return;
+    if (visual.querySelector('[data-difal-point][data-pinned]') || visual.contains(document.activeElement)) return;
+    hideDifalChartTooltip(visual);
+  }
+
+  function handleDifalChartPointerMove(event) {
+    const svg = event.target.closest('.difal-chart');
+    if (!svg) return;
+    const visual = svg.closest('.difal-chart-visual');
+    if (visual?.querySelector('[data-difal-point][data-pinned]')) return;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = ((event.clientX - rect.left) / rect.width) * 700;
+    const y = ((event.clientY - rect.top) / rect.height) * 230;
+    const left = Number(svg.dataset.plotLeft || 72);
+    const right = Number(svg.dataset.plotRight || 658);
+    if (x < left || x > right || y < 40 || y > 178) {
+      if (!visual?.contains(document.activeElement)) hideDifalChartTooltip(visual);
+      return;
+    }
+    const points = [...svg.querySelectorAll('[data-difal-point]')];
+    const nearest = points.reduce((best, point) => {
+      const distance = Math.abs(Number(point.getAttribute('cx')) - x);
+      return !best || distance < best.distance ? { point, distance } : best;
+    }, null);
+    if (nearest) showDifalChartTooltip(nearest.point);
+  }
+
+  function handleDifalChartFocusIn(event) {
+    const point = event.target.closest('[data-difal-point]');
+    if (point) showDifalChartTooltip(point);
+  }
+
+  function handleDifalChartFocusOut(event) {
+    const point = event.target.closest('[data-difal-point]');
+    if (point && !point.hasAttribute('data-pinned')) hideDifalChartTooltip(point.closest('.difal-chart-visual'));
+  }
+
+  function handleDifalChartKeydown(event) {
+    const point = event.target.closest('[data-difal-point]');
+    if (!point || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    point.click();
+  }
+
+  function showDifalChartTooltip(point) {
+    const visual = point.closest('.difal-chart-visual');
+    const tooltip = visual?.querySelector('.difal-chart-tooltip');
+    if (!visual || !tooltip) return;
+    const pointRect = point.getBoundingClientRect();
+    const visualRect = visual.getBoundingClientRect();
+    const x = pointRect.left + pointRect.width / 2 - visualRect.left;
+    const svg = visual.querySelector('.difal-chart');
+    const svgRect = svg?.getBoundingClientRect();
+    const crosshair = svg?.querySelector('[data-difal-crosshair]');
+    const date = tooltip.querySelector('[data-tooltip-date]');
+    const value = tooltip.querySelector('[data-tooltip-value]');
+    if (!svgRect || !date || !value) return;
+    date.textContent = point.dataset.label;
+    value.textContent = point.dataset.value;
+    if (crosshair) {
+      crosshair.setAttribute('x1', point.getAttribute('cx'));
+      crosshair.setAttribute('x2', point.getAttribute('cx'));
+      crosshair.style.display = 'block';
+    }
+    tooltip.hidden = false;
+    const tooltipWidth = tooltip.getBoundingClientRect().width;
+    const showRight = x + tooltipWidth + 10 <= visualRect.width;
+    tooltip.style.left = `${showRight ? x + 8 : x - 8}px`;
+    tooltip.style.top = `${svgRect.top - visualRect.top + (40 / 230) * svgRect.height}px`;
+    tooltip.style.transform = showRight ? 'none' : 'translateX(-100%)';
+  }
+
+  function hideDifalChartTooltip(visual) {
+    const tooltip = visual?.querySelector('.difal-chart-tooltip');
+    if (tooltip) tooltip.hidden = true;
+    const crosshair = visual?.querySelector('[data-difal-crosshair]');
+    if (crosshair) crosshair.style.display = 'none';
   }
 
   function handleNfseColumnDragStart(event) {
@@ -267,6 +379,23 @@ export function mountXmlReader30(root) {
 
   async function handleChange(event) {
     const action = event.target.dataset.action;
+    const cst060RateInput = event.target.closest('[data-cst060-rate]');
+    if (cst060RateInput) {
+      const rowIndex = cst060RateInput.dataset.rowIndex;
+      const row = state.cst060?.rows[Number(rowIndex)];
+      if (!updateCst060RowRate(rowIndex, cst060RateInput.value)) {
+        if (row) cst060RateInput.value = String(row.rate);
+        return;
+      }
+      render(root);
+      root.querySelector(`[data-cst060-rate][data-row-index="${rowIndex}"]`)?.focus();
+      return;
+    }
+    if (event.target.matches('[data-difal-chart-period]')) {
+      state.difalChartPeriod = event.target.value === 'month' ? 'month' : 'day';
+      render(root);
+      return;
+    }
     if (action === 'nfe-item-check') {
       const key = event.target.dataset.itemKey;
       if (event.target.checked) state.selectedNfeItems.add(key);
@@ -339,6 +468,12 @@ export function mountXmlReader30(root) {
       return;
     }
 
+    if (state.files.length) {
+      const replace = window.confirm(`Já existem ${state.files.length} arquivo(s) carregado(s). Deseja substituir por ${files.length} arquivo(s) selecionado(s)?`);
+      if (!replace) return;
+      state.files = [];
+    }
+
     state.errors = [];
     for (const file of files) {
       try {
@@ -354,8 +489,7 @@ export function mountXmlReader30(root) {
         state.errors.push(`${file.name}: ${error.message || 'não foi possível ler o XML.'}`);
       }
     }
-    state.difal = null;
-    state.cst060 = null;
+    // Keep completed reader reports available until the user clears the session.
     render(root);
   }
 }
@@ -380,7 +514,7 @@ function renderReaderPage(root) {
       <header class="reader-heading">
         <span class="reader-kicker">GCONT GESTÃO CONTÁBIL · LEITOR XML 3.0</span>
         <div class="reader-title-line"><h1>${escapeHtml(activeReaderLabel)}</h1><span class="reader-functional-badge">Funcional</span></div>
-        <p>${escapeHtml(readerPageDescriptions[state.activeReader] || readerPageDescriptions.nfe)} O processamento acontece localmente no navegador.</p>
+        <p>${escapeHtml(readerPageDescriptions[state.activeReader] || readerPageDescriptions.nfe)} Os XMLs são processados neste computador; a geração da DANFE usa o servidor local.</p>
       </header>
       ${renderUploadPanel(events)}
       <section class="reader-panel">${renderActiveTab(docs)}</section>
@@ -513,7 +647,7 @@ function renderNfeTab(docs) {
   return `
     <div class="reader-metrics">${metric('Documentos', docs.length)}${metric('Itens', docs.reduce((sum, doc) => sum + doc.items.length, 0))}${metric('Valor das notas', money(total))}${metric('Canceladas', docs.filter((doc) => isCancelled(doc)).length)}</div>
     ${renderNfeResultsTools(rows)}
-    ${rows.length ? `<div class="reader-table-wrap ${state.nfeFullscreen ? 'reader-fullscreen' : ''}">${state.nfeFullscreen ? `<div class="reader-fullscreen-bar"><strong>XMLs encontrados · NF-e</strong><button class="secondary-button" type="button" data-action="close-reader-fullscreen">Fechar tela cheia</button></div>` : ''}<table class="reader-table wide"><thead><tr><th>Conferido</th><th>NF-e</th><th>Status</th><th>Emissão</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Qtd.</th><th>V. produto</th><th>Base ICMS</th><th>Alíq.</th><th>ICMS</th><th>ICMS ST retido</th><th>Mono retido</th><th>Abrir</th></tr></thead><tbody>${rows.map((row) => { const key = getNfeItemKey(row); const checked = state.selectedNfeItems.has(key) || state.confirmedNfeItems.has(key); return `<tr><td><label class="nfe-item-check"><input type="checkbox" data-action="nfe-item-check" data-item-key="${escapeHtml(key)}" ${checked ? 'checked' : ''} aria-label="Marcar NF-e ${escapeHtml(row.number)} item ${escapeHtml(row.item.index)} como conferido" /><span></span></label></td><td><strong>${escapeHtml(row.number)}</strong></td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.doc.statusCode === '100' ? 'Autorizada' : 'Lida', isCancelled(row.doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td><span class="issuer-name" title="${escapeHtml(row.issuer || '-')}">${escapeHtml(limitDisplayText(row.issuer || '-', 21))}</span><small>${escapeHtml(row.issuerCnpj || '')}</small></td><td class="product-cell">${escapeHtml(row.product)}</td><td>${escapeHtml(row.ncm)}</td><td>${escapeHtml(row.cfop)}</td><td>${escapeHtml(row.cst)}</td><td>${escapeHtml(row.quantity)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.baseIcms)}</td><td>${escapeHtml(row.aliquota)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.icmsSt)}</td><td class="money">${money(row.icmsMono)}</td><td><button class="icon-button" type="button" data-action="view-xml" data-id="${row.doc.id}" aria-label="Abrir XML ${escapeHtml(row.number)}">XML</button></td></tr>`; }).join('')}</tbody></table></div>` : emptyState(docs.length ? 'Nenhum item corresponde à consulta.' : 'Nenhuma NF-e encontrada com esse termo de busca.', 'Confira o texto digitado ou envie outros arquivos XML.')}
+    ${rows.length ? `<div class="reader-table-wrap ${state.nfeFullscreen ? 'reader-fullscreen' : ''}">${state.nfeFullscreen ? `<div class="reader-fullscreen-bar"><strong>XMLs encontrados · NF-e</strong><button class="secondary-button" type="button" data-action="close-reader-fullscreen">Fechar tela cheia</button></div>` : ''}<table class="reader-table wide"><thead><tr><th>Conferido</th><th>NF-e</th><th>Status</th><th>Emissão</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>CST</th><th>Qtd.</th><th>V. produto</th><th>Base ICMS</th><th>Alíq.</th><th>ICMS</th><th>ICMS ST retido</th><th>Mono retido</th><th>Abrir</th></tr></thead><tbody>${rows.map((row) => { const key = getNfeItemKey(row); const checked = state.selectedNfeItems.has(key) || state.confirmedNfeItems.has(key); return `<tr><td><label class="nfe-item-check"><input type="checkbox" data-action="nfe-item-check" data-item-key="${escapeHtml(key)}" ${checked ? 'checked' : ''} aria-label="Marcar NF-e ${escapeHtml(row.number)} item ${escapeHtml(row.item.index)} como conferido" /><span></span></label></td><td><strong>${escapeHtml(row.number)}</strong></td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.doc.statusCode === '100' ? 'Autorizada' : 'Lida', isCancelled(row.doc) ? 'danger' : 'success')}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td><span class="issuer-name" title="${escapeHtml(row.issuer || '-')}">${escapeHtml(limitDisplayText(row.issuer || '-', 21))}</span><small>${escapeHtml(row.issuerCnpj || '')}</small></td><td class="product-cell">${escapeHtml(row.product)}</td><td>${escapeHtml(row.ncm)}</td><td>${escapeHtml(row.cfop)}</td><td>${escapeHtml(row.cst)}</td><td>${escapeHtml(row.quantity)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.baseIcms)}</td><td>${escapeHtml(row.aliquota)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.icmsSt)}</td><td class="money">${money(row.icmsMono)}</td><td><div class="nfe-document-actions"><button class="icon-button" type="button" data-action="view-xml" data-id="${row.doc.id}" aria-label="Abrir XML ${escapeHtml(row.number)}">XML</button><button class="icon-button" type="button" data-action="view-nfe-pdf" data-id="${row.doc.id}" aria-label="Baixar DANFE da NF-e ${escapeHtml(row.number)} em PDF" title="Baixar DANFE em PDF">PDF</button></div></td></tr>`; }).join('')}</tbody></table></div>` : emptyState(docs.length ? 'Nenhum item corresponde à consulta.' : 'Nenhuma NF-e encontrada com esse termo de busca.', 'Confira o texto digitado ou envie outros arquivos XML.')}
   `;
 }
 
@@ -665,27 +799,24 @@ function sortNfseFiscalDocuments(docs) {
 }
 
 function renderNfseMunicipalitySummaries(docs) {
-  const groupBy = (valueSelector) => {
+  const groupBy = (municipalitySelector, amountSelector) => {
     const groups = new Map();
     docs.forEach((doc) => {
-      const name = String(valueSelector(doc) || '').trim() || 'Não informado';
-      const row = groups.get(name) || { name, count: 0, service: 0, net: 0, iss: 0 };
+      const name = String(municipalitySelector(doc) || '').trim() || 'Não informado';
+      const row = groups.get(name) || { name, count: 0, total: 0 };
       row.count += 1;
-      row.service += numeric(doc.serviceValue);
-      row.net += numeric(doc.netValue);
-      row.iss += numeric(doc.issValue);
+      row.total += numeric(amountSelector(doc));
       groups.set(name, row);
     });
-    return [...groups.values()].sort((left, right) => right.service - left.service);
+    return [...groups.values()].sort((left, right) => right.total - left.total || left.name.localeCompare(right.name, 'pt-BR'));
   };
   const summaries = [
-    ['Somatório por município - Local prestação', groupBy((doc) => doc.serviceLocation)],
-    ['Somatório por município - Local ISS', groupBy((doc) => doc.issIncidence || doc.serviceLocation)]
+    { title: 'Somatório por município - Local prestação', amountLabel: 'Valor total de serviço', rows: groupBy((doc) => doc.serviceLocation, (doc) => doc.serviceValue) },
+    { title: 'Somatório por município - Local ISS', amountLabel: 'Valor total de ISS', rows: groupBy((doc) => doc.issIncidence, (doc) => doc.issValue) }
   ];
   if (!docs.length) return '';
-  return `<div class="nfse-municipality-grid">${summaries.map(([title, rows]) => `<section class="nfse-municipality-card"><h4>${escapeHtml(title)}</h4><div class="nfse-municipality-scroll"><table><thead><tr><th>Município</th><th>Notas</th><th>Valor serviço</th><th>Valor líquido</th><th>ISS</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.count}</td><td class="money">${money(row.service)}</td><td class="money">${money(row.net)}</td><td class="money">${money(row.iss)}</td></tr>`).join('')}</tbody></table></div></section>`).join('')}</div>`;
+  return `<div class="nfse-municipality-grid">${summaries.map(({ title, amountLabel, rows }) => `<section class="nfse-municipality-card"><h4>${escapeHtml(title)}</h4><div class="nfse-municipality-scroll"><table><thead><tr><th>Município</th><th>Notas</th><th>${escapeHtml(amountLabel)}</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${row.count}</td><td class="money">${money(row.total)}</td></tr>`).join('')}</tbody></table></div></section>`).join('')}</div>`;
 }
-
 function renderDifalTab(docs) {
   const query = state.readerFilters.difal || {};
   const report = state.difal;
@@ -708,37 +839,100 @@ function renderDifalReport(report) {
       <article><span class="difal-summary-icon" aria-hidden="true">◷</span><div><small>Alíquota interna usada</small><strong>${rate}%</strong></div></article>
       <article><span class="difal-summary-icon" aria-hidden="true">＄</span><div><small>Valor total do DIFAL</small><strong>${money(report.difal)}</strong></div></article>
     </section>
-    <section class="difal-chart-panel"><header><h3>Evolução do DIFAL nos XMLs</h3><span>Por dia</span></header>${renderDifalChart(report.rows)}</section>
+    <section class="difal-chart-panel"><header><h3>Evolução do DIFAL nos XMLs</h3><label class="difal-chart-period"><select data-difal-chart-period aria-label="Agrupar evolução do DIFAL"><option value="day" ${state.difalChartPeriod === 'day' ? 'selected' : ''}>Por dia</option><option value="month" ${state.difalChartPeriod === 'month' ? 'selected' : ''}>Por mês</option></select></label></header>${renderDifalChart(report.rows, state.difalChartPeriod)}</section>
   </div>
   <div class="reference-summary-strip"><span>Itens analisados: <strong>${report.rows.length} item(ns)</strong></span><span>Soma ICMS monofásico: <strong>${money(report.mono)}</strong></span><span>Soma ICMS próprio: <strong>${money(report.icmsOwn)}</strong></span><span>Soma ICMS 4%: <strong>${money(report.icms4)}</strong></span></div>
   <p class="inline-note">O ICMS monofásico exibido é o valor informado nos XMLs. Somente itens com ICMS interestadual de 4% entram no cálculo do DIFAL.</p>
-  ${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NF-e</th><th>Emissão</th><th>Produto</th><th>CST</th><th>Base ICMS</th><th>Alíq. interestadual</th><th>ICMS</th><th>ICMS mono XML</th><th>DIFAL</th><th>Situação</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.cstCsosn)}</td><td class="money">${money(row.base)}</td><td>${escapeHtml(row.rate)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.mono)}</td><td class="money">${row.difal === null ? '—' : money(row.difal)}</td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.rate === 4 ? 'ICMS 4%' : 'Fora do cálculo', isCancelled(row.doc) ? 'danger' : row.rate === 4 ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item elegível para o DIFAL foi encontrado nos XMLs carregados.', '')}`;
+  ${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>NF-e</th><th>Emissão</th><th>Produto</th><th>CST</th><th>Base ICMS</th><th>Alíq. interestadual</th><th>ICMS</th><th>ICMS mono XML</th><th>DIFAL</th><th>Situação</th></tr></thead><tbody>${report.rows.map((row) => `<tr class="${row.difal !== null && !isCancelled(row.doc) ? 'difal-eligible-row' : ''}"><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.cstCsosn)}</td><td class="money">${money(row.base)}</td><td>${escapeHtml(row.rate)}%</td><td class="money">${money(row.icms)}</td><td class="money">${money(row.mono)}</td><td class="money">${row.difal === null ? '—' : money(row.difal)}</td><td>${badge(isCancelled(row.doc) ? 'Cancelada' : row.rate === 4 ? 'ICMS 4%' : 'Fora do cálculo', isCancelled(row.doc) ? 'danger' : row.rate === 4 ? 'success' : 'neutral')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item elegível para o DIFAL foi encontrado nos XMLs carregados.', '')}`;
 }
 
-function renderDifalChart(rows) {
+function renderDifalChart(rows, period = 'day') {
   const grouped = new Map();
-  for (const row of rows.filter((item) => item.difal !== null && !isCancelled(item.doc))) {
-    const key = dateKey(row.doc.issuedAt) || 'sem-data';
-    grouped.set(key, (grouped.get(key) || 0) + numeric(row.difal));
+  const datedKeys = [];
+  let undatedTotal = 0;
+  for (const row of rows) {
+    if (isCancelled(row.doc)) continue;
+    const key = dateKey(row.doc.issuedAt);
+    if (key) {
+      datedKeys.push(key);
+      if (!grouped.has(key)) grouped.set(key, 0);
+      if (row.difal !== null) grouped.set(key, grouped.get(key) + numeric(row.difal));
+    } else if (row.difal !== null) {
+      undatedTotal += numeric(row.difal);
+    }
   }
-  const entries = [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  if (!entries.length) return `<div class="difal-chart-empty">O gráfico aparecerá quando houver itens elegíveis ao cálculo.</div>`;
-  const maxValue = Math.max(0.01, ...entries.map(([, value]) => value));
-  const points = entries.map(([key, value], index) => {
-    const x = entries.length === 1 ? 350 : 42 + index * (616 / (entries.length - 1));
-    const y = 178 - (value / maxValue) * 138;
-    return { key, value, x, y };
-  });
+
+  const uniqueDates = [...new Set(datedKeys)].sort();
+  let entries = [];
+  if (uniqueDates.length && period === 'month') {
+    const monthTotals = new Map();
+    const [firstYear, firstMonth] = uniqueDates[0].slice(0, 7).split('-').map(Number);
+    const [lastYear, lastMonth] = uniqueDates[uniqueDates.length - 1].slice(0, 7).split('-').map(Number);
+    let year = firstYear;
+    let month = firstMonth;
+    while (year < lastYear || (year === lastYear && month <= lastMonth)) {
+      monthTotals.set(`${year}-${String(month).padStart(2, '0')}`, 0);
+      month += 1;
+      if (month > 12) { month = 1; year += 1; }
+    }
+    for (const [key, value] of grouped) {
+      const monthKey = key.slice(0, 7);
+      monthTotals.set(monthKey, (monthTotals.get(monthKey) || 0) + value);
+    }
+    entries = [...monthTotals.entries()];
+  } else if (uniqueDates.length) {
+    const start = Date.parse(`${uniqueDates[0]}T00:00:00Z`);
+    const end = Date.parse(`${uniqueDates[uniqueDates.length - 1]}T00:00:00Z`);
+    for (let cursor = start; cursor <= end; cursor += 86400000) {
+      const key = new Date(cursor).toISOString().slice(0, 10);
+      entries.push([key, grouped.get(key) || 0]);
+    }
+  }
+  if (undatedTotal) entries.push(['sem-data', undatedTotal]);
+  if (!entries.length) return `<div class="difal-chart-empty">O gráfico aparecerá quando houver XMLs com data para exibir.</div>`;
+
+  const maxValue = Math.max(0, ...entries.map(([, value]) => value));
+  const tickStep = niceChartStep(maxValue || 1);
+  const chartMax = Math.max(tickStep * 4, Math.ceil(maxValue / tickStep) * tickStep);
+  const chartLeft = 72;
+  const chartRight = 658;
+  const points = entries.map(([key, value], index) => ({
+    key,
+    value,
+    x: entries.length === 1 ? (chartLeft + chartRight) / 2 : chartLeft + index * ((chartRight - chartLeft) / (entries.length - 1)),
+    y: 178 - (value / chartMax) * 138
+  }));
   const pointText = points.map((point) => `${point.x},${point.y}`).join(' ');
+  const areaText = `${points[0].x},178 ${pointText} ${points[points.length - 1].x},178`;
   const labelEvery = Math.max(1, Math.ceil(points.length / 6));
-  return `<svg class="difal-chart" viewBox="0 0 700 230" role="img" aria-label="Evolução diária do DIFAL calculado">
-    <line x1="42" y1="40" x2="658" y2="40"/><line x1="42" y1="109" x2="658" y2="109"/><line x1="42" y1="178" x2="658" y2="178"/>
-    <text x="4" y="44">${escapeHtml(money(maxValue))}</text><text x="4" y="113">${escapeHtml(money(maxValue / 2))}</text><text x="4" y="182">R$ 0,00</text>
-    <polyline points="${pointText}" />
-    ${points.map((point, index) => `<circle cx="${point.x}" cy="${point.y}" r="4"/><title>${escapeHtml(point.key === 'sem-data' ? 'Sem data' : dateLabel(point.key))}: ${escapeHtml(money(point.value))}</title>${index % labelEvery === 0 || index === points.length - 1 ? `<text class="chart-date" x="${point.x}" y="210" text-anchor="middle">${escapeHtml(point.key === 'sem-data' ? '—' : dateLabel(point.key).slice(0, 5))}</text>` : ''}`).join('')}
-  </svg>`;
+  const markerEvery = Math.max(1, Math.ceil((points.length - 1) / 12));
+  const periodLabel = (key) => {
+    if (key === 'sem-data') return 'Sem data';
+    if (period === 'month') {
+      const [year, month] = key.split('-').map(Number);
+      const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' })
+        .format(new Date(Date.UTC(year, month - 1, 1))).replace('.', '');
+      return `${monthName}/${year}`;
+    }
+    return dateLabel(key);
+  };
+  const pointLabel = (key) => key === 'sem-data' ? 'Sem data' : period === 'month' ? periodLabel(key) : `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+  const ticks = Array.from({ length: 5 }, (_, index) => chartMax - index * (chartMax / 4));
+  return `<div class="difal-chart-visual"><svg class="difal-chart" viewBox="0 0 700 230" data-plot-left="${chartLeft}" data-plot-right="${chartRight}" role="img" aria-label="Evolução ${period === 'month' ? 'mensal' : 'diária'} do DIFAL calculado">
+    <defs><linearGradient id="difal-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/></linearGradient></defs>
+    ${ticks.map((tick, index) => `<line x1="${chartLeft}" y1="${40 + index * 34.5}" x2="${chartRight}" y2="${40 + index * 34.5}"/><text x="4" y="${44 + index * 34.5}">${escapeHtml(money(tick))}</text>`).join('')}
+    <polygon class="difal-chart-area" points="${areaText}"/><polyline points="${pointText}"/><line class="difal-chart-crosshair" data-difal-crosshair x1="0" y1="40" x2="0" y2="178" style="display:none"/>
+    ${points.map((point, index) => `${index % markerEvery === 0 || index === points.length - 1 || point.value !== 0 ? `<circle cx="${point.x}" cy="${point.y}" r="4" data-difal-point data-label="${escapeHtml(pointLabel(point.key))}" data-value="${escapeHtml(money(point.value))}" tabindex="0" role="button" aria-label="${escapeHtml(pointLabel(point.key) + ': ' + money(point.value))}"><title>${escapeHtml(pointLabel(point.key))}: ${escapeHtml(money(point.value))}</title></circle>` : ''}${index % labelEvery === 0 || index === points.length - 1 ? `<text class="chart-date" x="${point.x}" y="210" text-anchor="middle">${escapeHtml(point.key === 'sem-data' ? '—' : period === 'month' ? periodLabel(point.key) : pointLabel(point.key))}</text>` : ''}`).join('')}
+  </svg><div class="difal-chart-tooltip" role="status" aria-live="polite" hidden><span data-tooltip-date></span><strong data-tooltip-value></strong></div></div><details class="difal-chart-data"><summary>Ver dados em tabela</summary><div class="difal-chart-table-wrap"><table><thead><tr><th>Período</th><th>DIFAL</th></tr></thead><tbody>${entries.map(([key, value]) => `<tr><td>${escapeHtml(periodLabel(key))}</td><td class="money">${money(value)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
+function niceChartStep(maxValue) {
+  const roughStep = maxValue / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return nice * magnitude;
+}
 function renderCst060Tab(docs) {
   const report = state.cst060;
   const filter = state.readerFilters.cst060;
@@ -749,13 +943,16 @@ function renderCst060Tab(docs) {
       <label class="reference-field span-2">Alíquota interna para o cálculo (%)<input name="rate" type="number" min="0.01" max="100" step="0.01" placeholder="Ex.: 18" value="${escapeHtml(filter.rate || '')}" required /></label>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Buscar nota e conferir CST 060</button></div>
     </form>
-    ${report ? renderCst060Report(report) : emptyState('Busque uma nota para iniciar a conferência.', 'O leitor usa a alíquota informada; pneus aplicam a alíquota fixa de 4%.')}
+    ${report ? renderCst060Report(report) : emptyState('Busque uma nota para iniciar a conferência.', 'Defina uma alíquota inicial; depois você pode ajustar cada produto. Pneus começam em 4%.')}
   `;
 }
 function renderCst060Report(report) {
-  return `<div class="reader-metrics">${metric('NF-e analisadas', report.notes)}${metric('NF-e com CST 060', report.notesWithItems)}${metric('Itens CST 060', report.rows.length)}${metric('ICMS ST no XML', money(sum(report.rows, (row) => row.retained)))}${metric('ICMS recalculado', money(sum(report.rows, (row) => row.calculated)))}${metric('Diferença', money(sum(report.rows, (row) => row.difference)), 'highlight')}</div>${report.rows.length ? `<div class="reader-table-wrap"><table class="reader-table wide"><thead><tr><th>Emissão</th><th>NF-e</th><th>Item</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>Valor produto</th><th>Desconto</th><th>Base</th><th>Alíquota</th><th>ICMS ST XML</th><th>ICMS calculado</th><th>Diferença</th><th>Status</th></tr></thead><tbody>${report.rows.map((row) => `<tr><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(row.item.index)}</td><td>${escapeHtml(row.doc.issuer || '-')}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.ncm)}</td><td>${escapeHtml(row.item.cfop)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.discount)}</td><td class="money">${money(row.base)}</td><td>${row.rate}%${row.tire ? ' · pneu' : ''}</td><td class="money">${money(row.retained)}</td><td class="money">${money(row.calculated)}</td><td class="money">${money(row.difference)}</td><td>${badge(row.status, row.status === 'OK' ? 'success' : 'warning')}</td></tr>`).join('')}</tbody></table></div>` : emptyState('Nenhum item com CST 060 foi encontrado.', 'Os XMLs carregados continuam disponíveis nos outros leitores.')}`;
+  const metrics = `<div class="reader-metrics">${metric('NF-e analisadas', report.notes)}${metric('NF-e com CST 060', report.notesWithItems)}${metric('Itens CST 060', report.rows.length)}${metric('ICMS ST no XML', money(sum(report.rows, (row) => row.retained)))}${metric('ICMS recalculado', money(sum(report.rows, (row) => row.calculated)))}${metric('Diferença', money(sum(report.rows, (row) => row.difference)), 'highlight')}</div>`;
+  const table = report.rows.length
+    ? `<div class="reader-table-wrap"><table class="reader-table wide cst060-table"><thead><tr><th>Emissão</th><th>NF-e</th><th>Item</th><th>Emitente</th><th>Produto</th><th>NCM</th><th>CFOP</th><th>Valor produto</th><th>Desconto</th><th>Base</th><th>Alíquota aplicada</th><th>ICMS ST XML</th><th>ICMS recalculado</th><th>Diferença</th><th>Status</th></tr></thead><tbody>${report.rows.map((row, index) => `<tr><td>${escapeHtml(dateLabel(row.doc.issuedAt))}</td><td>${escapeHtml(row.doc.number)}</td><td>${escapeHtml(row.item.index)}</td><td>${escapeHtml(row.doc.issuer || '-')}</td><td class="product-cell">${escapeHtml(row.item.description)}</td><td>${escapeHtml(row.item.ncm)}</td><td>${escapeHtml(row.item.cfop)}</td><td class="money">${money(row.productValue)}</td><td class="money">${money(row.discount)}</td><td class="money">${money(row.base)}</td><td class="cst060-rate-cell"><label class="cst060-rate-control"><input type="number" min="0.01" max="100" step="0.01" value="${escapeHtml(String(row.rate))}" data-cst060-rate data-row-index="${index}" aria-label="Alíquota aplicada ao produto ${escapeHtml(row.item.description)}"><span>%</span></label>${row.tire ? '<small class="cst060-rate-note">Pneu · padrão 4%</small>' : ''}</td><td class="money">${money(row.retained)}</td><td class="money">${money(row.calculated)}</td><td class="money">${money(row.difference)}</td><td>${badge(row.status, row.status === 'OK' ? 'success' : 'warning')}</td></tr>`).join('')}</tbody></table></div>`
+    : emptyState('Nenhum item com CST 060 foi encontrado.', 'Os XMLs carregados continuam disponíveis nos outros leitores.');
+  return `${metrics}<p class="cst060-rate-hint">Altere a alíquota diretamente em cada produto. O ICMS recalculado, a diferença e o resumo são atualizados automaticamente.</p>${table}`;
 }
-
 function renderToolbar(key, title, resultLabel, total) {
   return `<div class="panel-heading"><div><h2>${title}</h2><p>${resultLabel} · ${total} documento(s) carregado(s)</p></div><div class="toolbar-actions"><label class="reader-search"><span aria-hidden="true">⌕</span><input type="search" data-search-tab="${key}" value="${escapeHtml(state.search[key] || '')}" placeholder="Buscar documento, produto, CNPJ..." /></label><button type="button" class="secondary-button" data-action="export-current" ${total ? '' : 'disabled'}>Exportar Excel</button></div></div>`;
 }
@@ -795,6 +992,49 @@ function parseNfe(document, infNfe, fileName, xml) {
   };
 }
 
+async function downloadNfeDanfe(doc, requestApi, triggerButton) {
+  if (typeof requestApi !== 'function') {
+    window.alert('A sessão não está pronta para gerar a DANFE. Entre novamente no sistema.');
+    return;
+  }
+
+  const previousText = triggerButton?.textContent;
+  const previousTitle = triggerButton?.title;
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.setAttribute('aria-busy', 'true');
+    triggerButton.textContent = '...';
+    triggerButton.title = 'Gerando DANFE';
+  }
+
+  try {
+    const pdf = await requestApi('/nfe/danfe', {
+      method: 'POST',
+      body: { xml: doc.xml },
+      responseType: 'blob'
+    });
+    if (!(pdf instanceof Blob) || !pdf.size) throw new Error('O gerador não retornou um PDF válido.');
+
+    const fileNumber = String(doc.number || 'nota').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'nota';
+    const objectUrl = URL.createObjectURL(pdf);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `DANFE-NF-e-${fileNumber}.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  } catch (error) {
+    window.alert(error?.message || 'Não foi possível gerar a DANFE em PDF.');
+  } finally {
+    if (triggerButton?.isConnected) {
+      triggerButton.disabled = false;
+      triggerButton.removeAttribute('aria-busy');
+      triggerButton.textContent = previousText || 'PDF';
+      triggerButton.title = previousTitle || 'Baixar DANFE em PDF';
+    }
+  }
+}
 function parseCte(document, infCte, fileName, xml) {
   const ide = first(document, ['ide']);
   const emit = first(document, ['emit']);
@@ -934,6 +1174,17 @@ function calculateDifalPorDentro(base, interstateRate, internalRate) {
   const interstateIcms = base * (interstateRate / 100);
   const regrossedBase = (base - interstateIcms) / (1 - internal);
   return roundMoney(regrossedBase * internal - interstateIcms);
+}
+
+function updateCst060RowRate(rowIndex, rawRate) {
+  const row = state.cst060?.rows[Number(rowIndex)];
+  const rate = numeric(rawRate);
+  if (!row || !(rate > 0 && rate <= 100)) return false;
+  row.rate = roundMoney(rate);
+  row.calculated = row.retained === 0 ? 0 : roundMoney(row.base * row.rate / 100);
+  row.difference = roundMoney(row.retained - row.calculated);
+  row.status = Math.abs(row.difference) <= 0.01 ? 'OK' : 'Divergente';
+  return true;
 }
 
 function calculateCst060(form) {

@@ -4,13 +4,17 @@ Interface do Leitor XML 3.0, com a identidade visual do NotaSync GCONT.
 
 ## Iniciar
 
-No PowerShell do Windows, com Node.js instalado, execute na pasta do projeto:
+No PowerShell do Windows, com Node.js instalado, prepare e inicie o projeto:
 
-```bash
+```powershell
+npm.cmd install --ignore-scripts
+npm.cmd run setup:pdf
 npm.cmd start
 ```
 
-Abra `http://127.0.0.1:4173` (não use uma prévia estática ou Live Server, pois o login depende do servidor Node deste projeto). Não há dependências para instalar.
+A opção `--ignore-scripts` evita que uma dependência auxiliar tente compilar um validador Java; a geração da DANFE usa o gerador JavaScript. `setup:pdf` instala a ligação nativa do `libxmljs2` usada pelo parser do Wizard.io.
+
+Abra `http://127.0.0.1:4173` (não use uma prévia estática ou Live Server, pois o login depende do servidor Node deste projeto).
 
 ## Login e acessos
 
@@ -22,11 +26,13 @@ Em **Configurações**, o administrador também pode editar usuário, nome, perf
 
 ## Leitores incluídos
 
-- **NF-e:** uma busca por texto localiza notas, itens, clientes e produtos nos XMLs enviados.
+- **NF-e:** uma busca por texto localiza notas, itens, clientes e produtos nos XMLs enviados; a ação **PDF** baixa a DANFE A4 em retrato gerada pelo NFeWizard-io.
 - **NFS-e fiscal:** uma busca por texto localiza documentos, prestadores, tomadores e serviços.
 - **DIFAL:** busca as NF-e enviadas e calcula o resultado com a alíquota interna informada.
 - **CST 060:** busca as NF-e enviadas e confere o ICMS ST usando a alíquota interna informada, com alíquota de 4% para pneus.
 
-Os quatro leitores aparecem como opções próprias no menu lateral, agrupados em **Leitor XML 3.0**, dentro da identidade **GCONT Gestão Contábil**. O importador compartilhado aceita múltiplos XMLs de NF-e, CT-e e NFS-e, além de arquivos de evento NF-e. Não é preciso selecionar empresa nem período: cada consulta parte dos XMLs enviados por upload. O processamento acontece no navegador; os XMLs não são enviados ao servidor nem gravados em disco. Ao atualizar ou fechar a página, os arquivos importados são removidos da memória.
+Os quatro leitores aparecem como opções próprias no menu lateral, agrupados em **Leitor XML 3.0**, dentro da identidade **GCONT Gestão Contábil**. O importador compartilhado aceita múltiplos XMLs de NF-e, CT-e e NFS-e, além de arquivos de evento NF-e. Não é preciso selecionar empresa nem período: cada consulta parte dos XMLs enviados por upload. As consultas e conferências acontecem no navegador, e os arquivos importados ficam na memória da sessão. Ao atualizar ou fechar a página, eles são removidos. Para gerar uma DANFE, o XML da NF-e é enviado somente ao servidor local deste projeto, processado em memória pelo NFeWizard-io, e não é gravado em disco. O PDF fica temporariamente na pasta do sistema e é excluído depois de ser enviado ao navegador.
 
 Os parsers e utilitários `xml-reader30-*` foram copiados do frontend NotaSync. A interface foi adaptada para upload local em vez de consulta ao acervo/API do NotaSync.
+
+A geração de DANFE usa `@nfewizard/danfe`, distribuído sob a licença GPL-3.0; considere essa licença antes de redistribuir o projeto.
