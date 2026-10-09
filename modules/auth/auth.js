@@ -1,6 +1,7 @@
 const AUTH_STORAGE_KEY = 'notasync:leitores-xml:auth:v1';
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_ACTIVITY_PING_INTERVAL_MS = 60 * 1000;
+const AUTH_LOADING_MIN_DURATION_MS = 2200;
 
 export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount, settingsNav }) {
   if (!authRoot || !appShell || !readerMount || !settingsMount || !settingsNav) return;
@@ -13,6 +14,8 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   let authActivityPingPromise = null;
   let authGeneration = 0;
   let sessionEnding = false;
+  let authLoadingStartedAt = 0;
+  let authLoadingOverlay = null;
 
   document.addEventListener('keydown', registerAuthInteraction, true);
   document.addEventListener('pointerdown', registerAuthInteraction, true);
@@ -74,14 +77,14 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       if (!user) {
         clearStoredAuth();
         clearLocalAuth();
-        renderLogin();
+        await renderLoginAfterLoading();
         return;
       }
       auth.user = user;
       persistAuth();
-      showApplication();
+      await showApplication();
     } catch (error) {
-      renderLogin({ error: connectionMessage(error) });
+      await renderLoginAfterLoading({ error: connectionMessage(error) });
     }
   }
 
@@ -96,19 +99,25 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       return;
     }
 
-    renderAuthLoading();
+    renderAuthLoading({ username });
     try {
       const payload = await rawRequest('/auth/login', {
         method: 'POST',
         body: { username, password },
         skipAuth: true
       });
-      if (loginGeneration !== authGeneration) return;
+      if (loginGeneration !== authGeneration) {
+        await finishAuthLoading();
+        return;
+      }
       applyAuthPayload(payload);
-      showApplication();
+      await showApplication();
     } catch (error) {
-      if (loginGeneration !== authGeneration) return;
-      renderLogin({ username, error: connectionMessage(error) });
+      if (loginGeneration !== authGeneration) {
+        await finishAuthLoading();
+        return;
+      }
+      await renderLoginAfterLoading({ username, error: connectionMessage(error) });
     }
   }
 
@@ -128,10 +137,10 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     renderLogin();
   }
 
-  function showApplication() {
+  async function showApplication() {
     if (!auth.user) {
       clearStoredAuth();
-      renderLogin({ error: 'A API não retornou os dados da conta autenticada.' });
+      await renderLoginAfterLoading({ error: 'A API n\u00e3o retornou os dados da conta autenticada.' });
       return;
     }
     authRoot.replaceChildren();
@@ -143,6 +152,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsNav.removeAttribute('aria-current');
     document.querySelector('[data-reader="nfe"]')?.click();
     registerAuthInteraction({ skipPing: true });
+    await finishAuthLoading();
   }
 
   function syncUserIdentity() {
@@ -166,28 +176,53 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     }
   }
 
-  function renderAuthLoading() {
-    appShell.hidden = true;
-    authRoot.hidden = false;
-    authRoot.innerHTML = `
-      <section class="auth-screen auth-loading-screen" role="status" aria-live="polite" aria-busy="true">
-        <article class="auth-loading-panel">
-          <span class="auth-loading-spinner auth-loading-spinner-large" aria-hidden="true"></span>
-          <p class="auth-loading-kicker">ENTRANDO NO APP</p>
-          <h1>Carregando Leitores XML</h1>
-          <p class="auth-loading-subtitle">Validando seu acesso e preparando os leitores fiscais.</p>
-          <div class="auth-loading-now"><strong>Agora:</strong> Validando usuário e iniciando sua sessão</div>
-          <ol class="auth-loading-steps">
-            <li class="is-complete"><span class="auth-loading-dot" aria-hidden="true"></span>Preparando a página</li>
-            <li class="is-active" aria-current="step"><span class="auth-loading-dot" aria-hidden="true"></span>Validando usuário autenticado</li>
-            <li><span class="auth-loading-dot" aria-hidden="true"></span>Abrindo os leitores fiscais</li>
-          </ol>
-        </article>
-      </section>
+  function renderAuthLoading({ username = '' } = {}) {
+    authLoadingStartedAt = performance.now();
+    if (appShell.hidden && !authRoot.firstElementChild) renderLogin({ username, focus: false });
+
+    if (!authLoadingOverlay) authLoadingOverlay = document.createElement('section');
+    authLoadingOverlay.className = 'auth-screen auth-loading-screen';
+    authLoadingOverlay.setAttribute('role', 'status');
+    authLoadingOverlay.setAttribute('aria-live', 'polite');
+    authLoadingOverlay.setAttribute('aria-busy', 'true');
+    authLoadingOverlay.innerHTML = `
+      <article class="auth-loading-panel">
+        <span class="auth-loading-spinner auth-loading-spinner-large" aria-hidden="true"></span>
+        <p class="auth-loading-kicker">ENTRANDO NO APP</p>
+        <h1>Carregando Leitores XML</h1>
+        <p class="auth-loading-subtitle">Validando seu acesso e preparando os leitores fiscais.</p>
+        <div class="auth-loading-now"><strong>Agora:</strong> Validando usu\u00e1rio e iniciando sua sess\u00e3o</div>
+        <ol class="auth-loading-steps">
+          <li class="is-complete"><span class="auth-loading-dot" aria-hidden="true"></span>Preparando a p\u00e1gina</li>
+          <li class="is-active" aria-current="step"><span class="auth-loading-dot" aria-hidden="true"></span>Validando usu\u00e1rio autenticado</li>
+          <li><span class="auth-loading-dot" aria-hidden="true"></span>Abrindo os leitores fiscais</li>
+        </ol>
+      </article>
     `;
+    document.body.classList.add('auth-loading-active');
+    document.body.append(authLoadingOverlay);
   }
 
-  function renderLogin({ username = '', error = '' } = {}) {
+  async function finishAuthLoading() {
+    if (!authLoadingOverlay) return;
+    const overlay = authLoadingOverlay;
+    const startedAt = authLoadingStartedAt;
+    const remaining = AUTH_LOADING_MIN_DURATION_MS - (performance.now() - startedAt);
+    if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
+    if (overlay !== authLoadingOverlay || startedAt !== authLoadingStartedAt) return;
+    overlay.remove();
+    authLoadingOverlay = null;
+    authLoadingStartedAt = 0;
+    document.body.classList.remove('auth-loading-active');
+  }
+
+  async function renderLoginAfterLoading(options = {}) {
+    renderLogin({ ...options, focus: false });
+    await finishAuthLoading();
+    authRoot.querySelector('input[name="username"]')?.focus();
+  }
+
+  function renderLogin({ username = '', error = '', focus = true } = {}) {
     appShell.hidden = true;
     authRoot.hidden = false;
     const loginLogo = './assets/gssync-logo-horizontal.png';
@@ -196,15 +231,15 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         <article class="auth-card">
           <div class="auth-brand">
             <div class="auth-brand-frame"><img src="${loginLogo}" alt="GSsync" /></div>
-            <p>GCONT Gestão Contábil</p>
+            <p>GCONT Gest\u00e3o Cont\u00e1bil</p>
           </div>
           <h1>Acesso ao painel</h1>
-          <p class="auth-card-subtitle">Entre com seu usuário interno para acessar os leitores fiscais.</p>
+          <p class="auth-card-subtitle">Entre com seu usu\u00e1rio interno para acessar os leitores fiscais.</p>
           ${error ? `<div class="auth-error" role="alert">${escapeHtml(error)}</div>` : ''}
           <form id="authLoginForm" class="auth-login-form">
             <div class="auth-login-fields">
-              <label class="auth-field">Usuário
-                <input name="username" value="${escapeHtml(username)}" autocomplete="username" required autofocus />
+              <label class="auth-field">Usu\u00e1rio
+                <input name="username" value="${escapeHtml(username)}" autocomplete="username" required />
               </label>
               <label class="auth-field">Senha
                 <input name="password" type="password" autocomplete="current-password" required />
@@ -215,7 +250,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         </article>
       </section>
     `;
-    authRoot.querySelector('input[name="username"]')?.focus();
+    if (focus) authRoot.querySelector('input[name="username"]')?.focus();
   }
 
   async function loadUsers() {

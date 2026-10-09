@@ -93,14 +93,14 @@ button {
 .brand {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 9px;
   padding: 2px 0;
 }
 
 .brand-logo {
   display: block;
-  width: min(100%, 150px);
+  width: min(100%, 120px);
   height: auto;
 }
 
@@ -302,7 +302,7 @@ button {
   :root { --sidebar-width: 76px; }
   .sidebar { align-items: center; padding: 18px 10px 14px; }
   .brand { align-items: center; padding: 0; }
-  .brand-mark { display: block; width: 40px; height: 40px; object-fit: contain; }
+  .brand-mark { display: block; width: 34px; height: 34px; object-fit: contain; }
   .brand-logo, .brand-subtitle { display: none; }
   .sidebar-nav { width: 100%; margin-top: 18px; }
   .sidebar-nav-group { width: 100%; }
@@ -323,7 +323,7 @@ button {
 @media (max-width: 480px) {
   :root { --sidebar-width: 64px; }
   .sidebar { padding-right: 7px; padding-left: 7px; }
-  .brand-mark { width: 36px; height: 36px; }
+  .brand-mark { width: 30px; height: 30px; }
   .side-nav-link { min-height: 42px; }
   .side-nav-link[aria-current="page"]::before { left: -6px; }
   .theme-toggle { width: 42px; height: 42px; }
@@ -398,7 +398,8 @@ button {
 .settings-edit-actions > div { display: flex; gap: 8px; }
 
 .auth-screen { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 28px; background: var(--bg); }
-.auth-loading-screen { position: fixed; z-index: 100; inset: 0; min-height: 100dvh; overflow: auto; isolation: isolate; padding: 24px; color: #f1eff5; background: #09090b; }
+.auth-loading-active { overflow: hidden; }
+.auth-loading-screen { position: fixed; z-index: 1000; inset: 0; display: grid; min-height: 100dvh; place-items: center; overflow: hidden; isolation: isolate; padding: 24px; color: #f1eff5; background: rgba(9, 9, 11, 0.08); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: auth-loading-fade-in 180ms ease-out both; }
 .auth-loading-screen::before { position: absolute; z-index: -1; inset: -18%; content: ''; background: radial-gradient(ellipse at 20% 14%, rgba(250, 211, 43, 0.12), transparent 32%), radial-gradient(ellipse at 76% 20%, rgba(28, 111, 82, 0.11), transparent 36%), radial-gradient(ellipse at 45% 80%, rgba(67, 58, 93, 0.2), transparent 44%); filter: blur(34px); }
 .auth-loading-panel { width: min(504px, 100%); padding: 25px; background: #201e27; border: 1px solid #393642; border-radius: 20px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48); }
 .auth-loading-spinner-large { display: block; width: 42px; height: 42px; margin-bottom: 14px; border: 3px solid #454250; border-top-color: #f3cc17; border-radius: 50%; animation: auth-spin 0.9s linear infinite; }
@@ -417,7 +418,7 @@ button {
 .auth-loading-steps li.is-active .auth-loading-dot { background: #f3cc17; box-shadow: 0 0 0 4px rgba(243, 204, 23, 0.12); }
 .auth-card { width: min(460px, 100%); padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: 0 14px 42px rgba(21, 24, 28, 0.09); }
 .auth-brand { display: grid; justify-items: start; gap: 10px; margin-bottom: 24px; }
-.auth-brand-frame { width: min(260px, 100%); padding: 8px; background: #100f14; border-radius: 10px; }
+.auth-brand-frame { width: min(220px, 100%); padding: 8px; background: #100f14; border-radius: 10px; }
 .auth-brand img { display: block; width: 100%; height: auto; }
 .auth-brand p { margin: 0; color: var(--text-secondary); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 .auth-card h1 { margin: 0; font-family: 'Sora', 'Manrope', sans-serif; font-size: 1.13rem; }
@@ -433,6 +434,7 @@ button {
 .auth-error { margin-top: 14px; padding: 10px 12px; color: #9a2d2d; background: rgba(199, 68, 68, 0.09); border: 1px solid rgba(199, 68, 68, 0.28); border-radius: 9px; font-size: 0.68rem; line-height: 1.5; }
 .auth-loading-spinner { display: inline-block; width: 19px; height: 19px; flex: 0 0 19px; border: 2px solid var(--line); border-top-color: var(--accent-dark); border-radius: 50%; animation: auth-spin 0.8s linear infinite; }
 @keyframes auth-spin { to { transform: rotate(360deg); } }
+  @keyframes auth-loading-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 :root[data-theme='Escuro'] .settings-card, :root[data-theme='Escuro'] .auth-card { box-shadow: 0 14px 42px rgba(0, 0, 0, 0.28); }
 :root[data-theme='Escuro'] .settings-role-badge.is-admin { color: #f5d64b; background: rgba(250, 211, 43, 0.12); }
