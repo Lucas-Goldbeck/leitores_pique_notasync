@@ -13,6 +13,7 @@ export type XmlReader30NfeLineItem = {
   unitValueRaw: string;
   totalValue: string;
   totalValueRaw: string;
+  ipiRaw: string;
   cstCsosn: string;
   cfop: string;
   icmsStRet: string;
@@ -23,6 +24,7 @@ export type XmlReader30NfeLineItem = {
   adRemICMSRetRaw: string;
   vICMSMonoRet: string;
   vICMSMonoRetRaw: string;
+  vICMSMonoTotalRaw: string;
   baseCalculoIcms: string;
   baseCalculoIcmsRaw: string;
   aliquotaIcms: string;

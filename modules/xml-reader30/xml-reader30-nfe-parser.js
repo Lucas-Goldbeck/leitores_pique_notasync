@@ -127,6 +127,8 @@ function extractNfeLineItems(xmlString) {
 
 function extractNfeLineItemTaxValues(detNode, prodNode) {
   const impostoNode = findXmlElementsByLocalName(detNode, 'imposto')[0] || detNode;
+  const ipiNode = findXmlElementsByLocalName(impostoNode, 'IPI')[0] || null;
+  const ipiRaw = getFirstXmlText([ipiNode, impostoNode], ['vIPI']) || '0';
   const icmsNode = findXmlElementsByLocalName(impostoNode, 'ICMS')[0] || null;
   const icmsGroupNode = icmsNode
     ? Array.from(icmsNode.children || []).find((node) => node && node.nodeType === 1) || null
@@ -134,15 +136,20 @@ function extractNfeLineItemTaxValues(detNode, prodNode) {
   const icmsTaxNode = icmsGroupNode || icmsNode;
   const icmsSourceNodes = [icmsTaxNode].filter(Boolean);
   const cstCsosn = getFirstXmlText(icmsSourceNodes, ['CST', 'CSOSN']) || '0';
-  const icmsStRet = getFirstXmlText(icmsSourceNodes, ['vICMSSTRet', 'vICMSST', 'vBCSTRet']) || '0';
+  const icmsStRet = getFirstXmlText(icmsSourceNodes, ['vICMSSTRet']) || '0';
   const qBCMonoRet = getFirstXmlText(icmsSourceNodes, ['qBCMonoRet']) || '0';
   const adRemICMSRet = getFirstXmlText(icmsSourceNodes, ['adRemICMSRet']) || '0';
   const vICMSMonoRet = getFirstXmlText(icmsSourceNodes, ['vICMSMonoRet']) || '0';
+  const vICMSMonoTotalValues = ['vICMSMono', 'vICMSMonoReten', 'vICMSMonoRet'].map((tag) => getFirstXmlText(icmsSourceNodes, [tag])).filter(Boolean);
+  const vICMSMonoTotalRaw = vICMSMonoTotalValues.length
+    ? String(vICMSMonoTotalValues.reduce((total, value) => total + (Number(value.replace(',', '.')) || 0), 0))
+    : '';
   const baseCalculoIcms = getFirstXmlText(icmsSourceNodes, ['vBC', 'vBCST', 'vBCSTRet', 'vBCEfet', 'vBCUFDest']) || '0';
   const aliquotaIcms = getFirstXmlText(icmsSourceNodes, ['pICMS', 'pST', 'pICMSST', 'pICMSInter', 'pICMSInterPart', 'pICMSEfet']) || '0';
   const valorIcms = getFirstXmlText(icmsSourceNodes, ['vICMS', 'vICMSST', 'vICMSDif', 'vICMSDeson', 'vICMSEfet']) || '0';
 
   return {
+    ipiRaw,
     cstCsosn,
     cfop: getFirstXmlText([prodNode, icmsTaxNode, icmsNode, impostoNode, detNode], ['CFOP']) || '0',
     icmsStRet: formatXmlReader30CurrencyValue(icmsStRet),
@@ -153,6 +160,7 @@ function extractNfeLineItemTaxValues(detNode, prodNode) {
     adRemICMSRetRaw: adRemICMSRet || '0',
     vICMSMonoRet: formatXmlReader30CurrencyValue(vICMSMonoRet),
     vICMSMonoRetRaw: vICMSMonoRet || '0',
+    vICMSMonoTotalRaw,
     baseCalculoIcms: formatXmlReader30DecimalValue(baseCalculoIcms),
     baseCalculoIcmsRaw: baseCalculoIcms || '0',
     aliquotaIcms: formatXmlReader30DecimalValue(aliquotaIcms),

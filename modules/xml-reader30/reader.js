@@ -596,6 +596,14 @@ function renderActiveTab(docs) {
 function renderNfeReaderSection(allDocs) {
   const filter = state.readerFilters.nfe;
   const docs = filter.hasSearched ? filterNfeDocs(allDocs, filter) : [];
+  const totalFromDocsOrItems = (valueKey, rawKey, rowKey) => docs.reduce((total, doc) => {
+    if (doc[rawKey]) return total + doc[valueKey];
+    return total + nfeRows(doc).reduce((itemTotal, row) => itemTotal + row[rowKey], 0);
+  }, 0);
+  const totalIpi = totalFromDocsOrItems('totalIpi', 'totalIpiRaw', 'ipi');
+  const totalIcms = totalFromDocsOrItems('totalIcms', 'totalIcmsRaw', 'icms');
+  const totalIcmsMono = totalFromDocsOrItems('totalIcmsMono', 'totalIcmsMonoRaw', 'icmsMonoTotal');
+  const totalIcmsStRet = totalFromDocsOrItems('totalIcmsStRet', 'totalIcmsStRetRaw', 'icmsSt');
   return `<section class="reference-reader-section">
     <header class="reference-module-heading"><div><h2>Leitor de NF-e</h2><p>Leia e confira os XMLs de NF-e carregados nesta sessão.</p></div><div class="reference-module-actions">${statusPill(`${sum(docs, (doc) => doc.items.length)} item(ns)`, docs.length ? 'success' : 'neutral')}<button type="button" class="secondary-button" data-action="export-current" ${docs.length ? '' : 'disabled'}>Exportar Excel</button></div></header>
     <form class="reference-form" id="nfeReaderFilterForm">
@@ -603,7 +611,7 @@ function renderNfeReaderSection(allDocs) {
       <div class="reference-hint span-4"><span aria-hidden="true"></span>Exibe as notas e os itens do XML com emissão, emitente, NCM, CFOP, CST e valores de ICMS para conferência.</div>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${allDocs.length ? '' : 'disabled'}>Buscar nota</button></div>
     </form>
-    ${filter.hasSearched ? `<div class="reference-summary-strip"><span>Notas encontradas: <strong>${docs.length}</strong></span><span>Valor total: <strong>${money(sum(docs, (doc) => doc.total))}</strong></span><span>ICMS: <strong>${money(sum(docs.flatMap(nfeRows), (row) => row.icms))}</strong></span></div>${renderNfeTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NF-e para começar.', 'Pesquise pelo número, chave, CNPJ, cliente ou produto.')}
+    ${filter.hasSearched ? `<div class="reference-summary-strip"><span>Valor Total IPI: <strong>${money(totalIpi)}</strong></span><span>Total de notas no período: <strong>${docs.length} nota(s)</strong></span><span>Valor Total das notas: <strong>${money(sum(docs, (doc) => doc.total))}</strong></span><span>Valor Total ICMS: <strong>${money(totalIcms)}</strong></span><span>Valor ICMS Monofásico: <strong>${money(totalIcmsMono)}</strong></span><span>Valor ICMS ST RET: <strong>${money(totalIcmsStRet)}</strong></span></div>${renderNfeTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NF-e para começar.', 'Pesquise pelo número, chave, CNPJ, cliente ou produto.')}
   </section>`;
 }
 function renderNfseReaderSection(allDocs) {
@@ -981,6 +989,11 @@ function parseNfe(document, infNfe, fileName, xml) {
   const emit = first(document, ['emit']);
   const dest = first(document, ['dest']);
   const total = first(document, ['ICMSTot']);
+  const totalIpiRaw = text(total, ['vIPI']);
+  const totalIcmsRaw = text(total, ['vICMS']);
+  const totalIcmsMonoValues = ['vICMSMono', 'vICMSMonoReten', 'vICMSMonoRet'].map((tag) => text(total, [tag])).filter(Boolean);
+  const totalIcmsMonoRaw = totalIcmsMonoValues.length ? String(totalIcmsMonoValues.reduce((value, item) => value + numeric(item), 0)) : '';
+  const totalIcmsStRetRaw = text(total, ['vICMSSTRet']);
   const prot = first(document, ['infProt']);
   const key = extractAccessKey(infNfe.getAttribute('Id') || text(document, ['chNFe']), 44);
   const statusCode = text(prot, ['cStat']);
@@ -990,6 +1003,10 @@ function parseNfe(document, infNfe, fileName, xml) {
     issuedAt: text(ide, ['dhEmi', 'dEmi']), issuer: text(emit, ['xNome']), issuerCnpj: digits(text(emit, ['CNPJ', 'CPF'])),
     recipient: text(dest, ['xNome']), recipientCnpj: digits(text(dest, ['CNPJ', 'CPF'])),
     total: numeric(text(total, ['vNF'])), productsTotal: numeric(text(total, ['vProd'])),
+    totalIpi: numeric(totalIpiRaw), totalIpiRaw,
+    totalIcms: numeric(totalIcmsRaw), totalIcmsRaw,
+    totalIcmsMono: numeric(totalIcmsMonoRaw), totalIcmsMonoRaw,
+    totalIcmsStRet: numeric(totalIcmsStRetRaw), totalIcmsStRetRaw,
     statusCode, cancelled: ['101', '151'].includes(statusCode),
     items: extractNfeLineItems(xml), events: []
   };
@@ -1137,7 +1154,8 @@ function nfeRows(doc) {
     doc, id: doc.id, fileName: doc.fileName, key: doc.key, number: doc.number, issuer: doc.issuer, issuerCnpj: doc.issuerCnpj,
     product: item.description, ncm: item.ncm, cfop: item.cfop, cst: item.cstCsosn, quantity: item.quantity,
     productValue: numeric(item.totalValueRaw), baseIcms: numeric(item.baseCalculoIcmsRaw), aliquota: numeric(item.aliquotaIcmsRaw),
-    icms: numeric(item.valorIcmsRaw), icmsSt: numeric(item.icmsStRetRaw), icmsMono: numeric(item.vICMSMonoRetRaw), item
+    ipi: numeric(item.ipiRaw), icms: numeric(item.valorIcmsRaw), icmsSt: numeric(item.icmsStRetRaw),
+    icmsMono: numeric(item.vICMSMonoRetRaw), icmsMonoTotal: numeric(item.vICMSMonoTotalRaw || item.vICMSMonoRetRaw), item
   }));
 }
 
