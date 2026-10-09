@@ -96,7 +96,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       return;
     }
 
-    renderLogin({ username, busy: true });
+    renderAuthLoading();
     try {
       const payload = await rawRequest('/auth/login', {
         method: 'POST',
@@ -149,7 +149,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     if (!auth.user) return;
     settingsNav.hidden = auth.user.role !== 'admin';
     const name = auth.user.nome || auth.user.username || 'Usuário';
-    const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'NS';
+    const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'GS';
     document.getElementById('authUserName').textContent = name;
     document.getElementById('authUserRole').textContent = roleLabel(auth.user.role);
     document.getElementById('authUserInitials').textContent = initials;
@@ -167,46 +167,51 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   }
 
   function renderAuthLoading() {
+    appShell.hidden = true;
     authRoot.hidden = false;
     authRoot.innerHTML = `
-      <section class="auth-screen" aria-live="polite">
-        <article class="auth-card auth-loading-card">
-          <span class="auth-loading-spinner" aria-hidden="true"></span>
-          <p>Validando sessão do NotaSync…</p>
+      <section class="auth-screen auth-loading-screen" role="status" aria-live="polite" aria-busy="true">
+        <article class="auth-loading-panel">
+          <span class="auth-loading-spinner auth-loading-spinner-large" aria-hidden="true"></span>
+          <p class="auth-loading-kicker">ENTRANDO NO APP</p>
+          <h1>Carregando Leitores XML</h1>
+          <p class="auth-loading-subtitle">Validando seu acesso e preparando os leitores fiscais.</p>
+          <div class="auth-loading-now"><strong>Agora:</strong> Validando usuário e iniciando sua sessão</div>
+          <ol class="auth-loading-steps">
+            <li class="is-complete"><span class="auth-loading-dot" aria-hidden="true"></span>Preparando a página</li>
+            <li class="is-active" aria-current="step"><span class="auth-loading-dot" aria-hidden="true"></span>Validando usuário autenticado</li>
+            <li><span class="auth-loading-dot" aria-hidden="true"></span>Abrindo os leitores fiscais</li>
+          </ol>
         </article>
       </section>
     `;
   }
 
-  function renderLogin({ username = '', error = '', busy = false } = {}) {
+  function renderLogin({ username = '', error = '' } = {}) {
     appShell.hidden = true;
     authRoot.hidden = false;
-    const loginLogo = document.documentElement.dataset.theme === 'Claro'
-      ? './assets/notasync-logo-horizontal-antiga.png'
-      : './assets/notasync-logo-horizontal.png';
+    const loginLogo = './assets/gssync-logo-horizontal.png';
     authRoot.innerHTML = `
       <section class="auth-screen">
         <article class="auth-card">
           <div class="auth-brand">
-            <div class="auth-brand-frame"><img src="${loginLogo}" alt="NotaSync" /></div>
+            <div class="auth-brand-frame"><img src="${loginLogo}" alt="GSsync" /></div>
             <p>GCONT Gestão Contábil</p>
           </div>
           <h1>Acesso ao painel</h1>
           <p class="auth-card-subtitle">Entre com seu usuário interno para acessar os leitores fiscais.</p>
           ${error ? `<div class="auth-error" role="alert">${escapeHtml(error)}</div>` : ''}
-          ${busy ? '<div class="auth-validating" role="status">Validando usuário…</div>' : `
-            <form id="authLoginForm" class="auth-login-form">
-              <div class="auth-login-fields">
-                <label class="auth-field">Usuário
-                  <input name="username" value="${escapeHtml(username)}" autocomplete="username" required autofocus />
-                </label>
-                <label class="auth-field">Senha
-                  <input name="password" type="password" autocomplete="current-password" required />
-                </label>
-              </div>
-              <div class="auth-login-actions"><button class="auth-primary-button" type="submit">Entrar</button></div>
-            </form>
-          `}
+          <form id="authLoginForm" class="auth-login-form">
+            <div class="auth-login-fields">
+              <label class="auth-field">Usuário
+                <input name="username" value="${escapeHtml(username)}" autocomplete="username" required autofocus />
+              </label>
+              <label class="auth-field">Senha
+                <input name="password" type="password" autocomplete="current-password" required />
+              </label>
+            </div>
+            <div class="auth-login-actions"><button class="auth-primary-button" type="submit">Entrar</button></div>
+          </form>
         </article>
       </section>
     `;
@@ -240,7 +245,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsMount.innerHTML = `
       <section class="settings-page">
         <header class="settings-page-header">
-          <div><span class="settings-kicker">NOTASYNC · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
+          <div><span class="settings-kicker">GSSYNC · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
           <button class="settings-secondary-button" type="button" data-action="reload-users" ${settings.loading ? 'disabled' : ''}>${settings.loading ? 'Atualizando…' : 'Atualizar usuários'}</button>
         </header>
         ${settings.error ? `<div class="settings-alert" role="alert">${escapeHtml(settings.error)}</div>` : ''}
@@ -259,7 +264,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
             </form>
           </section>
           <section class="settings-card settings-users-card">
-            <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no NotaSync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
+            <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no GSsync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
             ${settings.loading ? '<div class="settings-empty"><span class="auth-loading-spinner" aria-hidden="true"></span>Carregando usuários…</div>' : settings.users.length ? `
               <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Tempo logado</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>
                 ${settings.users.map((user) => {
@@ -556,7 +561,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         cache: 'no-store'
       });
     } catch {
-      throw new Error('A conexão com a API do NotaSync falhou.');
+      throw new Error('A conexão com a API do GSsync falhou.');
     }
 
     if (response.ok && responseType === 'blob') return response.blob();
@@ -745,8 +750,8 @@ function connectionMessage(error) {
   if (error?.status === 405) {
     return 'Esta página está em um servidor antigo ou estático. Inicie o projeto com npm.cmd start e abra http://127.0.0.1:4173.';
   }
-  if (message.includes('conexão com a API') || message.includes('API do NotaSync')) {
-    return 'Não foi possível conectar ao NotaSync principal. Confirme se a API está ativa em http://127.0.0.1:3000 ou ajuste NOTASYNC_API_BASE_URL.';
+  if (message.includes('conexão com a API') || message.includes('API do GSsync')) {
+    return 'Não foi possível conectar ao GSsync principal. Verifique a configuração da API e tente novamente.';
   }
   return message || 'Não foi possível concluir a operação.';
 }

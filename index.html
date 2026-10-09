@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#201e1e" />
-    <title>NotaSync | Leitores</title>
-    <link rel="icon" type="image/png" href="./assets/notasync-favicon.png" />
+    <title>GSsync | Leitores</title>
+    <link rel="icon" type="image/png" href="./assets/gssync-symbol.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -26,25 +26,20 @@
   <body>
     <div id="authRoot"></div>
     <div class="app-shell" id="appShell" hidden>
-      <aside class="sidebar" aria-label="Identidade NotaSync">
+      <aside class="sidebar" aria-label="Identidade GSsync">
         <div class="brand">
           <img
             class="brand-mark"
-            src="./assets/notasync-icon.png"
+            src="./assets/gssync-symbol.png"
             alt=""
             aria-hidden="true"
           />
           <img
             class="brand-logo"
-            src="./assets/notasync-logo-horizontal.png"
-            alt="NotaSync — Busca, monitora, armazena"
+            src="./assets/gssync-logo-horizontal.png"
+            alt="GSsync — Busca, monitora, agiliza"
           />
           <p class="brand-subtitle">CONFERÊNCIA FISCAL</p>
-          <div class="auth-user-card" id="authUserCard" hidden>
-            <div class="auth-user-avatar" id="authUserInitials" aria-hidden="true">NS</div>
-            <div class="auth-user-copy"><strong id="authUserName"></strong><span id="authUserRole"></span></div>
-            <button class="auth-logout-button" id="authLogoutButton" type="button">Sair</button>
-          </div>
         </div>
 
         <nav class="sidebar-nav" aria-label="Menu principal">
@@ -73,7 +68,11 @@
         </nav>
 
         <div class="sidebar-bottom">
-          <div class="sidebar-caption">NotaSync <span aria-hidden="true">·</span> GCONT</div>
+          <section class="sidebar-status-card" aria-label="GSsync. Aplicação web. Sistema online.">
+            <strong class="sidebar-status-title">GSsync</strong>
+            <span class="sidebar-status-description">Aplicação web</span>
+            <span class="sidebar-status-indicator"><span class="sidebar-status-dot" aria-hidden="true"></span><span>Sistema online</span></span>
+          </section>
         </div>
       </aside>
 
@@ -95,6 +94,11 @@
               <path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
+          <div class="auth-user-card" id="authUserCard" hidden>
+            <div class="auth-user-copy"><strong id="authUserName"></strong><span id="authUserRole"></span></div>
+            <div class="auth-user-avatar" id="authUserInitials" aria-hidden="true">GS</div>
+            <button class="auth-logout-button" id="authLogoutButton" type="button">Sair</button>
+          </div>
         </div>
         <div class="reader-mount" id="readerMount"></div>
         <div class="settings-mount" id="settingsMount" hidden></div>

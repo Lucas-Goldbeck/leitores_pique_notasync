@@ -1,8 +1,8 @@
-# Leitores Pique NotaSync
+# Leitores Pique GSsync
 
 Para hospedar com Docker no EasyPanel, siga o guia [EASYPANEL.md](EASYPANEL.md).
 
-Interface do Leitor XML 3.0, com a identidade visual do NotaSync GCONT.
+Interface do Leitor XML 3.0, com a identidade visual do GSsync GCONT.
 
 ## Iniciar
 
@@ -20,7 +20,7 @@ Abra `http://127.0.0.1:4173` (não use uma prévia estática ou Live Server, poi
 
 ## Login e acessos
 
-O login e os acessos são locais deste projeto; não usam usuários nem senhas do NotaSync principal. Na primeira inicialização, o servidor cria somente o usuário `admin`. Uma senha aleatória é exibida uma única vez no terminal. Guarde-a para entrar no sistema. Para escolher a senha antes da primeira inicialização, defina `ADMIN_PASSWORD` no ambiente antes de executar `npm start`.
+O login e os acessos são locais deste projeto; não usam usuários nem senhas do GSsync principal. Na primeira inicialização, o servidor cria somente o usuário `admin`. Uma senha aleatória é exibida uma única vez no terminal. Guarde-a para entrar no sistema. Para escolher a senha antes da primeira inicialização, defina `ADMIN_PASSWORD` no ambiente antes de executar `npm start`.
 
 As contas ficam em `%LOCALAPPDATA%\LeitoresPiqueNotaSync\users.json`, fora da pasta pública do site; as senhas são armazenadas como hashes. O menu **Configurações** aparece apenas para administradores. Depois de entrar, o admin pode criar outros acessos, ativar ou desativar usuários e redefinir senhas. O servidor verifica a permissão de administrador em cada operação.
 
