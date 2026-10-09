@@ -225,7 +225,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   function renderLogin({ username = '', error = '', focus = true } = {}) {
     appShell.hidden = true;
     authRoot.hidden = false;
-    const loginLogo = './assets/gssync-logo-horizontal.png';
+    const loginLogo = './assets/gssync-logo-completa.png';
     authRoot.innerHTML = `
       <section class="auth-screen">
         <article class="auth-card">
