@@ -59,7 +59,8 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     }
 
     Object.assign(auth, saved);
-    renderLogin({ focus: false });
+    authRoot.replaceChildren();
+    authRoot.hidden = true;
     try {
       let user = null;
       if (auth.accessToken) {
