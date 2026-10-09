@@ -341,10 +341,10 @@ button {
 .reader-mount {
   width: 100%;
   min-height: 100vh;
-  padding: clamp(22px, 3vw, 42px);
+  padding: 82px clamp(22px, 3vw, 42px) clamp(22px, 3vw, 42px);
 }
 
-.settings-mount { width: 100%; min-height: 100vh; padding: clamp(22px, 3vw, 42px); }
+.settings-mount { width: 100%; min-height: 100vh; padding: 82px clamp(22px, 3vw, 42px) clamp(22px, 3vw, 42px); }
 .settings-page { display: grid; width: min(100%, 1500px); gap: 18px; margin: 0 auto; }
 .settings-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .settings-kicker { color: var(--accent-dark); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; }
@@ -1008,14 +1008,14 @@ button {
 }
 
 .workspace { position: relative; }
-.workspace-topbar { position: absolute; z-index: 10; top: 16px; right: clamp(14px, 2vw, 28px); display: flex; align-items: center; gap: 8px; }
-.workspace-topbar .auth-user-card { display: flex; order: 2; min-height: 46px; align-items: center; gap: 9px; padding: 5px 8px 5px 12px; color: var(--text-primary); background: var(--surface); border-color: var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
-.workspace-topbar .auth-user-copy { display: grid; order: 1; max-width: 150px; gap: 1px; }
-.workspace-topbar .auth-user-copy strong { max-width: 150px; font-size: 0.68rem; }
+.workspace-topbar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; display: flex; min-height: 62px; align-items: center; justify-content: flex-end; gap: 14px; padding: 7px clamp(14px, 2vw, 28px); background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.workspace-topbar .auth-user-card { display: flex; order: 2; min-height: 42px; align-items: center; gap: 10px; padding: 0; color: var(--text-primary); background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.workspace-topbar .auth-user-copy { display: grid; order: 1; max-width: 150px; gap: 1px; text-align: right; }
+.workspace-topbar .auth-user-copy strong { max-width: 150px; font-size: 0.7rem; text-transform: none; }
 .workspace-topbar .auth-user-copy span { color: var(--text-secondary); font-size: 0.58rem; }
 .workspace-topbar .auth-user-avatar { order: 2; width: 32px; height: 32px; flex-basis: 32px; }
-.workspace-topbar .auth-logout-button { order: 3; margin-left: 0; color: var(--text-primary); border-color: var(--line-strong); }
-.workspace-topbar .auth-logout-button:hover { color: var(--text-primary); border-color: var(--accent-dark); }
+.workspace-topbar .auth-logout-button { order: 3; margin-left: 0; padding: 8px 10px; color: var(--text-primary); background: transparent; border: 0; border-radius: 8px; font-size: 0.68rem; }
+.workspace-topbar .auth-logout-button:hover { color: var(--text-primary); background: var(--surface-hover); }
 .workspace-topbar .theme-toggle {
   order: 1;
   width: auto;
@@ -1044,11 +1044,11 @@ button {
 }
 
 @media (max-width: 700px) {
-  .workspace-topbar { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; padding: 10px 14px 0; }
+  .workspace-topbar { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; padding: 10px 14px; }
   .workspace-topbar .auth-user-card { max-width: 100%; }
   .workspace-topbar .auth-user-copy, .workspace-topbar .auth-user-copy strong { max-width: min(30vw, 150px); }
   .workspace-topbar .theme-toggle { min-width: 146px; max-width: 100%; }
-  .reader-mount, .settings-mount { padding-top: 14px; }
+  .reader-mount, .settings-mount { padding-top: 18px; }
 }
 
 .nfse-reader-search-form .reference-form-actions { justify-content: flex-end; }

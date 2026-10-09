@@ -245,7 +245,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsMount.innerHTML = `
       <section class="settings-page">
         <header class="settings-page-header">
-          <div><span class="settings-kicker">GSSYNC · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
+          <div><span class="settings-kicker">GSsync · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
           <button class="settings-secondary-button" type="button" data-action="reload-users" ${settings.loading ? 'disabled' : ''}>${settings.loading ? 'Atualizando…' : 'Atualizar usuários'}</button>
         </header>
         ${settings.error ? `<div class="settings-alert" role="alert">${escapeHtml(settings.error)}</div>` : ''}
