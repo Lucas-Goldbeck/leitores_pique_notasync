@@ -40,6 +40,11 @@
             alt="NotaSync — Busca, monitora, armazena"
           />
           <p class="brand-subtitle">CONFERÊNCIA FISCAL</p>
+          <div class="auth-user-card" id="authUserCard" hidden>
+            <div class="auth-user-avatar" id="authUserInitials" aria-hidden="true">NS</div>
+            <div class="auth-user-copy"><strong id="authUserName"></strong><span id="authUserRole"></span></div>
+            <button class="auth-logout-button" id="authLogoutButton" type="button">Sair</button>
+          </div>
         </div>
 
         <nav class="sidebar-nav" aria-label="Menu principal">
@@ -68,11 +73,6 @@
         </nav>
 
         <div class="sidebar-bottom">
-          <div class="auth-user-card" id="authUserCard" hidden>
-            <div class="auth-user-avatar" id="authUserInitials" aria-hidden="true">NS</div>
-            <div class="auth-user-copy"><strong id="authUserName"></strong><span id="authUserRole"></span></div>
-            <button class="auth-logout-button" id="authLogoutButton" type="button">Sair</button>
-          </div>
           <div class="sidebar-caption">NotaSync <span aria-hidden="true">·</span> GCONT</div>
         </div>
       </aside>
