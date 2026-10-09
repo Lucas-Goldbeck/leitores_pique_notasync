@@ -1,7 +1,6 @@
 const AUTH_STORAGE_KEY = 'notasync:leitores-xml:auth:v1';
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_ACTIVITY_PING_INTERVAL_MS = 60 * 1000;
-const AUTH_LOADING_MIN_DURATION_MS = 2200;
 
 export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount, settingsNav }) {
   if (!authRoot || !appShell || !readerMount || !settingsMount || !settingsNav) return;
@@ -14,8 +13,6 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   let authActivityPingPromise = null;
   let authGeneration = 0;
   let sessionEnding = false;
-  let authLoadingStartedAt = 0;
-  let authLoadingOverlay = null;
 
   document.addEventListener('keydown', registerAuthInteraction, true);
   document.addEventListener('pointerdown', registerAuthInteraction, true);
@@ -62,7 +59,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     }
 
     Object.assign(auth, saved);
-    renderAuthLoading();
+    renderLogin({ focus: false });
     try {
       let user = null;
       if (auth.accessToken) {
@@ -77,14 +74,14 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       if (!user) {
         clearStoredAuth();
         clearLocalAuth();
-        await renderLoginAfterLoading();
+        renderLogin();
         return;
       }
       auth.user = user;
       persistAuth();
       await showApplication();
     } catch (error) {
-      await renderLoginAfterLoading({ error: connectionMessage(error) });
+      renderLogin({ error: connectionMessage(error) });
     }
   }
 
@@ -99,25 +96,18 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       return;
     }
 
-    renderAuthLoading({ username });
     try {
       const payload = await rawRequest('/auth/login', {
         method: 'POST',
         body: { username, password },
         skipAuth: true
       });
-      if (loginGeneration !== authGeneration) {
-        await finishAuthLoading();
-        return;
-      }
+      if (loginGeneration !== authGeneration) return;
       applyAuthPayload(payload);
       await showApplication();
     } catch (error) {
-      if (loginGeneration !== authGeneration) {
-        await finishAuthLoading();
-        return;
-      }
-      await renderLoginAfterLoading({ username, error: connectionMessage(error) });
+      if (loginGeneration !== authGeneration) return;
+      renderLogin({ username, error: connectionMessage(error) });
     }
   }
 
@@ -140,7 +130,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   async function showApplication() {
     if (!auth.user) {
       clearStoredAuth();
-      await renderLoginAfterLoading({ error: 'A API n\u00e3o retornou os dados da conta autenticada.' });
+      renderLogin({ error: 'A API n\u00e3o retornou os dados da conta autenticada.' });
       return;
     }
     authRoot.replaceChildren();
@@ -152,7 +142,6 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsNav.removeAttribute('aria-current');
     document.querySelector('[data-reader="nfe"]')?.click();
     registerAuthInteraction({ skipPing: true });
-    await finishAuthLoading();
   }
 
   function syncUserIdentity() {
@@ -174,52 +163,6 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       }
       settingsNav.removeAttribute('aria-current');
     }
-  }
-
-  function renderAuthLoading({ username = '' } = {}) {
-    authLoadingStartedAt = performance.now();
-    if (appShell.hidden && !authRoot.firstElementChild) renderLogin({ username, focus: false });
-
-    if (!authLoadingOverlay) authLoadingOverlay = document.createElement('section');
-    authLoadingOverlay.className = 'auth-screen auth-loading-screen';
-    authLoadingOverlay.setAttribute('role', 'status');
-    authLoadingOverlay.setAttribute('aria-live', 'polite');
-    authLoadingOverlay.setAttribute('aria-busy', 'true');
-    authLoadingOverlay.innerHTML = `
-      <article class="auth-loading-panel">
-        <span class="auth-loading-spinner auth-loading-spinner-large" aria-hidden="true"></span>
-        <p class="auth-loading-kicker">ENTRANDO NO APP</p>
-        <h1>Carregando Leitores XML</h1>
-        <p class="auth-loading-subtitle">Validando seu acesso e preparando os leitores fiscais.</p>
-        <div class="auth-loading-now"><strong>Agora:</strong> Validando usu\u00e1rio e iniciando sua sess\u00e3o</div>
-        <ol class="auth-loading-steps">
-          <li class="is-complete"><span class="auth-loading-dot" aria-hidden="true"></span>Preparando a p\u00e1gina</li>
-          <li class="is-active" aria-current="step"><span class="auth-loading-dot" aria-hidden="true"></span>Validando usu\u00e1rio autenticado</li>
-          <li><span class="auth-loading-dot" aria-hidden="true"></span>Abrindo os leitores fiscais</li>
-        </ol>
-      </article>
-    `;
-    document.body.classList.add('auth-loading-active');
-    document.body.append(authLoadingOverlay);
-  }
-
-  async function finishAuthLoading() {
-    if (!authLoadingOverlay) return;
-    const overlay = authLoadingOverlay;
-    const startedAt = authLoadingStartedAt;
-    const remaining = AUTH_LOADING_MIN_DURATION_MS - (performance.now() - startedAt);
-    if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
-    if (overlay !== authLoadingOverlay || startedAt !== authLoadingStartedAt) return;
-    overlay.remove();
-    authLoadingOverlay = null;
-    authLoadingStartedAt = 0;
-    document.body.classList.remove('auth-loading-active');
-  }
-
-  async function renderLoginAfterLoading(options = {}) {
-    renderLogin({ ...options, focus: false });
-    await finishAuthLoading();
-    authRoot.querySelector('input[name="username"]')?.focus();
   }
 
   function renderLogin({ username = '', error = '', focus = true } = {}) {
@@ -254,11 +197,10 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   }
 
   async function loadUsers() {
-    if (auth.user?.role !== 'admin') return;
+    if (auth.user?.role !== 'admin' || settings.loading) return;
     const requestingAdminId = auth.user.userId;
     settings.loading = true;
     settings.error = '';
-    renderSettings();
     try {
       const users = await apiRequest('/auth/usuarios');
       if (auth.user?.userId === requestingAdminId && auth.user?.role === 'admin') settings.users = Array.isArray(users) ? users : [];
@@ -300,7 +242,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
           </section>
           <section class="settings-card settings-users-card">
             <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no GSsync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
-            ${settings.loading ? '<div class="settings-empty"><span class="auth-loading-spinner" aria-hidden="true"></span>Carregando usuários…</div>' : settings.users.length ? `
+            ${settings.users.length ? `
               <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Tempo logado</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>
                 ${settings.users.map((user) => {
                   const self = user.id === auth.user.userId;
