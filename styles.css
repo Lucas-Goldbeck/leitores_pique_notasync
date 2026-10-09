@@ -98,8 +98,8 @@ button {
   padding: 2px 0;
 }
 
-.brand-logo-frame { position: relative; width: min(100%, 180px); aspect-ratio: 696 / 160; overflow: hidden; }
-.brand-logo { position: absolute; top: -164.9%; left: -41.9%; display: block; width: 183.91%; max-width: none; height: auto; }
+.brand-logo-frame { width: min(100%, 180px); }
+.brand-logo { display: block; width: 100%; height: auto; }
 
 .brand-mark { display: none; }
 
@@ -398,8 +398,8 @@ button {
 .auth-screen { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 28px; background: var(--bg); }
 .auth-card { width: min(460px, 100%); padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: 0 14px 42px rgba(21, 24, 28, 0.09); }
 .auth-brand { display: grid; justify-items: start; gap: 10px; margin-bottom: 24px; }
-.auth-brand-frame { position: relative; width: min(220px, 100%); aspect-ratio: 696 / 160; overflow: hidden; background: transparent; }
-.auth-brand-frame img { position: absolute; top: -164.9%; left: -41.9%; display: block; width: 183.91%; max-width: none; height: auto; }
+.auth-brand-frame { width: min(220px, 100%); background: transparent; }
+.auth-brand-frame img { display: block; width: 100%; height: auto; }
 .auth-brand p { margin: 0; color: var(--text-secondary); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 .auth-card h1 { margin: 0; font-family: 'Sora', 'Manrope', sans-serif; font-size: 1.13rem; }
 .auth-card-subtitle { margin: 5px 0 0; color: var(--text-secondary); font-size: 0.76rem; line-height: 1.5; }
