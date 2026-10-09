@@ -98,7 +98,7 @@ button {
   padding: 2px 0;
 }
 
-.brand-logo-frame { width: min(100%, 180px); }
+.brand-logo-frame { width: min(100%, 190px); }
 .brand-logo { display: block; width: 100%; height: auto; }
 
 .brand-mark { display: none; }
