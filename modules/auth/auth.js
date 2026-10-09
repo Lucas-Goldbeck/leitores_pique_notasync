@@ -174,7 +174,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       <section class="auth-screen">
         <article class="auth-card">
           <div class="auth-brand">
-            <div class="auth-brand-frame"><img src="${loginLogo}" alt="GSsync" /></div>
+            <div class="auth-brand-frame"><img src="${loginLogo}" alt="GSync" /></div>
             <p>GCONT Gest\u00e3o Cont\u00e1bil</p>
           </div>
           <h1>Acesso ao painel</h1>
@@ -223,7 +223,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsMount.innerHTML = `
       <section class="settings-page">
         <header class="settings-page-header">
-          <div><span class="settings-kicker">GSsync · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
+          <div><span class="settings-kicker">GSync · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
           <button class="settings-secondary-button" type="button" data-action="reload-users" ${settings.loading ? 'disabled' : ''}>${settings.loading ? 'Atualizando…' : 'Atualizar usuários'}</button>
         </header>
         ${settings.error ? `<div class="settings-alert" role="alert">${escapeHtml(settings.error)}</div>` : ''}
@@ -242,7 +242,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
             </form>
           </section>
           <section class="settings-card settings-users-card">
-            <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no GSsync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
+            <header><span class="settings-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6m3-3h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><h2>Usuários e acessos</h2><p>Contas cadastradas no GSync principal.</p></div><span class="settings-count">${settings.users.length}</span></header>
             ${settings.users.length ? `
               <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Tempo logado</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>
                 ${settings.users.map((user) => {
@@ -539,7 +539,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         cache: 'no-store'
       });
     } catch {
-      throw new Error('A conexão com a API do GSsync falhou.');
+      throw new Error('A conexão com a API do GSync falhou.');
     }
 
     if (response.ok && responseType === 'blob') return response.blob();
@@ -728,8 +728,8 @@ function connectionMessage(error) {
   if (error?.status === 405) {
     return 'Esta página está em um servidor antigo ou estático. Inicie o projeto com npm.cmd start e abra http://127.0.0.1:4173.';
   }
-  if (message.includes('conexão com a API') || message.includes('API do GSsync')) {
-    return 'Não foi possível conectar ao GSsync principal. Verifique a configuração da API e tente novamente.';
+  if (message.includes('conexão com a API') || message.includes('API do GSync')) {
+    return 'Não foi possível conectar ao GSync principal. Verifique a configuração da API e tente novamente.';
   }
   return message || 'Não foi possível concluir a operação.';
 }
