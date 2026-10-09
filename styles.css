@@ -98,14 +98,14 @@ button {
   padding: 2px 0;
 }
 
-.brand-logo-frame { position: relative; width: min(100%, 160px); aspect-ratio: 696 / 160; overflow: hidden; }
+.brand-logo-frame { position: relative; width: min(100%, 180px); aspect-ratio: 696 / 160; overflow: hidden; }
 .brand-logo { position: absolute; top: -164.9%; left: -41.9%; display: block; width: 183.91%; max-width: none; height: auto; }
 
 .brand-mark { display: none; }
 
 .brand-subtitle {
   margin: 0;
-  transform: translateX(-8px);
+  transform: translateX(-16px);
   color: #b5b5b7;
   font-size: 0.72rem;
   font-weight: 700;
@@ -981,6 +981,9 @@ button {
 
 .workspace { position: relative; }
 .workspace-topbar { position: absolute; z-index: 10; top: 0; right: 0; left: 0; display: flex; min-height: 62px; align-items: center; justify-content: flex-end; gap: 14px; padding: 7px clamp(14px, 2vw, 28px); background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.workspace-topbar-copy { display: grid; min-width: 0; gap: 2px; margin-right: auto; }
+.workspace-topbar-copy strong { color: var(--text-primary); font-size: 0.88rem; font-weight: 800; }
+.workspace-topbar-copy span { color: var(--text-secondary); font-size: 0.68rem; line-height: 1.35; }
 .workspace-topbar .auth-user-card { display: flex; order: 2; min-height: 42px; align-items: center; gap: 10px; padding: 0; color: var(--text-primary); background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .workspace-topbar .auth-user-copy { display: grid; order: 1; max-width: 150px; gap: 1px; text-align: right; }
 .workspace-topbar .auth-user-copy strong { max-width: 150px; font-size: 0.7rem; text-transform: none; }
@@ -1017,6 +1020,7 @@ button {
 
 @media (max-width: 700px) {
   .workspace-topbar { position: static; display: flex; flex-wrap: wrap; justify-content: flex-end; padding: 10px 14px; }
+  .workspace-topbar-copy { flex: 1 1 100%; }
   .workspace-topbar .auth-user-card { max-width: 100%; }
   .workspace-topbar .auth-user-copy, .workspace-topbar .auth-user-copy strong { max-width: min(30vw, 150px); }
   .workspace-topbar .theme-toggle { min-width: 146px; max-width: 100%; }

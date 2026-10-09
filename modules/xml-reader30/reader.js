@@ -600,6 +600,7 @@ function renderNfeReaderSection(allDocs) {
     <header class="reference-module-heading"><div><h2>Leitor de NF-e</h2><p>Leia e confira os XMLs de NF-e carregados nesta sessão.</p></div><div class="reference-module-actions">${statusPill(`${sum(docs, (doc) => doc.items.length)} item(ns)`, docs.length ? 'success' : 'neutral')}<button type="button" class="secondary-button" data-action="export-current" ${docs.length ? '' : 'disabled'}>Exportar Excel</button></div></header>
     <form class="reference-form" id="nfeReaderFilterForm">
       <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text)}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
+      <div class="reference-hint span-4"><span aria-hidden="true"></span>Exibe as notas e os itens do XML com emissão, emitente, NCM, CFOP, CST e valores de ICMS para conferência.</div>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${allDocs.length ? '' : 'disabled'}>Buscar nota</button></div>
     </form>
     ${filter.hasSearched ? `<div class="reference-summary-strip"><span>Notas encontradas: <strong>${docs.length}</strong></span><span>Valor total: <strong>${money(sum(docs, (doc) => doc.total))}</strong></span><span>ICMS: <strong>${money(sum(docs.flatMap(nfeRows), (row) => row.icms))}</strong></span></div>${renderNfeTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NF-e para começar.', 'Pesquise pelo número, chave, CNPJ, cliente ou produto.')}
@@ -613,6 +614,7 @@ function renderNfseReaderSection(allDocs) {
     <header class="reference-module-heading"><div><h2>Leitura fiscal de NFS-e</h2><p>Consulte as NFS-e carregadas nesta sessão e confira os dados fiscais consolidados.</p></div>${statusPill(`${docs.length} linha(s)`, docs.length ? 'success' : 'neutral')}</header>
     <form class="reference-form reference-form-wide nfse-reader-search-form" id="nfseReaderFilterForm">
       <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text)}" placeholder="Número, chave, CNPJ, prestador, tomador ou serviço..." /></label>
+      <div class="reference-hint span-4"><span aria-hidden="true"></span>Consolida prestador, tomador, serviços, valores, ISS e retenções declarados nos XMLs de NFS-e.</div>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${allDocs.length ? '' : 'disabled'}>Buscar NFS-e</button><button class="secondary-button" type="button" data-action="nfse-clear-search" ${filter.hasSearched || filter.text ? '' : 'disabled'}>Limpar</button></div>
     </form>
     ${filter.hasSearched ? `<div class="reference-summary-strip nfse-source-summary"><span>Fonte: <strong>Upload local</strong></span><span>Resultado: <strong>${docs.length} XML(s)</strong></span><span>Valor somado: <strong>${money(sum(docs.filter((doc) => !isCancelled(doc)), (doc) => doc.serviceValue))}</strong></span><span>Atualizado: <strong>${lastImported ? escapeHtml(dateTimeLabel(lastImported)) : '—'}</strong></span></div>${renderNfseTab(docs)}` : emptyState(allDocs.length ? 'XMLs prontos para consulta' : 'Carregue XMLs de NFS-e para começar.', 'Pesquise pelo número, chave, CNPJ, prestador, tomador ou serviço.')}
@@ -825,7 +827,7 @@ function renderDifalTab(docs) {
     <form class="reference-form" id="difalForm">
       <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(query.text || '')}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
       <label class="reference-field span-2">Alíquota interna para o cálculo (%)<input name="rate" type="number" min="0.01" max="99.99" step="0.01" placeholder="Ex.: 18" value="${escapeHtml(query.rate || '')}" required /></label>
-      <div class="reference-hint span-4"><span aria-hidden="true"></span>O cálculo considera apenas itens com ICMS interestadual de 4% das NF-e enviadas por upload.</div>
+      <div class="reference-hint span-4"><span aria-hidden="true"></span>Calcula o DIFAL com a alíquota interna informada e considera itens de NF-e com ICMS interestadual de 4%.</div>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Buscar nota e calcular DIFAL</button></div>
     </form>
     ${report ? renderDifalReport(report) : emptyState('Busque uma nota para iniciar.', 'O cálculo usa as NF-e enviadas por upload e exige a alíquota interna.')}
@@ -941,6 +943,7 @@ function renderCst060Tab(docs) {
     <form class="reference-form" id="cst060Form">
       <label class="reference-field span-4">Buscar nota<input name="text" value="${escapeHtml(filter.text || '')}" placeholder="Número, chave, CNPJ, cliente ou produto..." /></label>
       <label class="reference-field span-2">Alíquota interna para o cálculo (%)<input name="rate" type="number" min="0.01" max="100" step="0.01" placeholder="Ex.: 18" value="${escapeHtml(filter.rate || '')}" required /></label>
+      <div class="reference-hint span-4"><span aria-hidden="true"></span>Localiza itens com CST 060, compara o ICMS ST do XML com o valor recalculado e permite ajustar a alíquota por produto.</div>
       <div class="reference-form-actions span-4"><button class="primary-button" type="submit" ${docs.length ? '' : 'disabled'}>Buscar nota e conferir CST 060</button></div>
     </form>
     ${report ? renderCst060Report(report) : emptyState('Busque uma nota para iniciar a conferência.', 'Defina uma alíquota inicial; depois você pode ajustar cada produto. Pneus começam em 4%.')}
