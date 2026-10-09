@@ -105,7 +105,7 @@ button {
 
 .brand-subtitle {
   margin: 0;
-  transform: translateX(-16px);
+  transform: translate(-22px, 2px);
   color: #b5b5b7;
   font-size: 0.72rem;
   font-weight: 700;
