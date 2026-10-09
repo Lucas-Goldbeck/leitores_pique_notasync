@@ -100,7 +100,7 @@ button {
 
 .brand-logo {
   display: block;
-  width: min(100%, 204px);
+  width: min(100%, 150px);
   height: auto;
 }
 
