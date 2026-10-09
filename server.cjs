@@ -7,6 +7,7 @@ const { NFE_GerarDanfe } = require('@nfewizard/danfe');
 const { Pool } = require('pg');
 
 const root = path.resolve(__dirname);
+const supabaseCaFile = path.join(root, 'certs', 'supabase-ca.crt');
 const authDirectory = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : path.join(process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir(), 'LeitoresPiqueNotaSync');
@@ -739,8 +740,8 @@ async function closeDatabaseSession(session, reason) {
 
 function requireTls(connectionString) {
   const url = new URL(connectionString);
-  const sslMode = (url.searchParams.get('sslmode') || '').toLowerCase();
-  if (sslMode !== 'verify-full') url.searchParams.set('sslmode', 'verify-full');
+  url.searchParams.set('sslmode', 'verify-full');
+  url.searchParams.set('sslrootcert', supabaseCaFile);
   return url.toString();
 }
 

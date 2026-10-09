@@ -30,8 +30,9 @@ Configure backups para o volume `/data` no EasyPanel para preservar as contas em
 
 O script [schema.sql](supabase/schema.sql) cria as tabelas privadas `app_private.users` e `app_private.login_sessions`. O servidor também executa esse script automaticamente ao iniciar com `DATABASE_URL` configurada.
 
-1. No painel Supabase, abra **Connect** e copie a connection string do **Dedicated pooler** (a opção exibida na sua imagem). A porta `6543` é compatível com esta aplicação.
-   Se o EasyPanel continuar retornando `ENOTFOUND` para `db.[PROJECT-REF].supabase.co`, copie a URI de **Shared Pooler → Transaction mode** no painel e use o host e usuário exibidos lá. O pooler compartilhado é a opção com suporte IPv4 sem add-on do projeto; o dedicated pooler depende de IPv6 ou do add-on IPv4.
+O certificado raiz oficial do Supabase fica em `certs/supabase-ca.crt` e é incluído na imagem Docker pelo `COPY . .` do Dockerfile. O servidor acrescenta `sslmode=verify-full` e `sslrootcert` à conexão: o TLS valida a cadeia usando esse CA e também confere o hostname do Session Pooler. Não é necessário configurar o certificado como variável de ambiente. Se o Supabase substituir o CA, atualize esse arquivo e faça um novo build e deploy.
+
+1. No painel Supabase, abra **Connect** e copie a connection string de **Session Pooler** (Shared Pooler, Session mode). Use o host, usuário e a porta `5432` fornecidos pelo painel; para o pooler compartilhado, o usuário normalmente inclui o project ref, como `postgres.[PROJECT-REF]`.
 2. Troque `[YOUR-PASSWORD]` pela senha do banco. Se ela tiver caracteres especiais, use a versão percent-encoded na URI.
 3. No EasyPanel, adicione `DATABASE_URL` em **Environment** e marque o valor como segredo. Cole a connection string completa. Não coloque-a no código, em arquivos versionados ou no navegador.
 4. Faça o deploy. Na inicialização, o servidor cria o schema privado e as tabelas de contas e sessões. Se `app_private.users` estiver vazia e houver `/data/users.json`, as contas existentes são importadas; se não houver arquivo, o administrador inicial é criado.
