@@ -169,12 +169,10 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   function renderLogin({ username = '', error = '', focus = true } = {}) {
     appShell.hidden = true;
     authRoot.hidden = false;
-    const loginLogo = './assets/gssync-logo-completa.png';
     authRoot.innerHTML = `
       <section class="auth-screen">
         <article class="auth-card">
           <div class="auth-brand">
-            <div class="auth-brand-frame"><img src="${loginLogo}" alt="GSync" /></div>
             <p>GCONT Gest\u00e3o Cont\u00e1bil</p>
           </div>
           <h1>Acesso ao painel</h1>
