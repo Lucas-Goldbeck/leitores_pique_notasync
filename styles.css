@@ -1137,7 +1137,7 @@ button {
 .auth-form-panel { flex: 1; background: var(--surface); display: flex; align-items: center; justify-content: center; padding: 48px; }
 .auth-form-inner { width: 100%; max-width: 380px; }
 .auth-form-logo { display: flex; justify-content: center; margin-bottom: 28px; }
-.auth-form-logo-frame { display: grid; place-items: center; width: min(160px, 80%); padding: 10px 14px; background: var(--sidebar); border-radius: var(--radius-md); }
+.auth-form-logo-frame { display: grid; place-items: center; width: min(160px, 80%); padding: 10px 14px; }
 .auth-form-logo-img { display: block; width: 100%; height: auto; }
 .auth-form-title { font-family: 'Sora', 'Manrope', sans-serif; font-size: 21px; font-weight: 800; color: var(--text-primary); line-height: 1.22; margin-bottom: 6px; letter-spacing: -.025em; text-align: center; }
 .auth-form-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 26px; text-align: center; }

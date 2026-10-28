@@ -207,7 +207,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
           <div class="auth-form-inner">
             <div class="auth-form-logo">
               <div class="auth-form-logo-frame">
-                <img class="auth-form-logo-img" src="./assets/confis-logo.png" alt="CONFIS">
+                <img class="auth-form-logo-img" src="./assets/confis-logo2.png" alt="CONFIS — Conferência Fiscal">
               </div>
             </div>
             <h2 class="auth-form-title">Acessar o sistema</h2>
