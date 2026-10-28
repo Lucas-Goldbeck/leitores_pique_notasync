@@ -76,7 +76,9 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  const requestedPath = requestUrl.pathname === '/' ? '/login.html' : requestUrl.pathname;
+  const requestedPath = requestUrl.pathname === '/' || requestUrl.pathname === '/login.html'
+    ? '/index.html'
+    : requestUrl.pathname;
   const filePath = path.resolve(root, `.${requestedPath}`);
   const relativePath = path.relative(root, filePath);
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
