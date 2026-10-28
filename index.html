@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="Claro">
+<html lang="pt-BR" data-theme="Escuro">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,10 +15,11 @@
     <script>
       (() => {
         try {
-          if (localStorage.getItem('gcont:theme:v1') === 'Escuro') {
-            document.documentElement.dataset.theme = 'Escuro';
-          }
-        } catch {}
+          const savedTheme = localStorage.getItem('gcont:theme:v1');
+          document.documentElement.dataset.theme = savedTheme === 'Claro' ? 'Claro' : 'Escuro';
+        } catch {
+          document.documentElement.dataset.theme = 'Escuro';
+        }
       })();
     </script>
   </head>

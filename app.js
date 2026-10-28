@@ -20,9 +20,9 @@ import { mountAuthAccess } from './modules/auth/auth.js';
   }
 
   try {
-    root.dataset.theme = localStorage.getItem(storageKey) === 'Escuro' ? 'Escuro' : 'Claro';
+    root.dataset.theme = localStorage.getItem(storageKey) === 'Claro' ? 'Claro' : 'Escuro';
   } catch {
-    root.dataset.theme = 'Claro';
+    root.dataset.theme = 'Escuro';
   }
 
   renderTheme();

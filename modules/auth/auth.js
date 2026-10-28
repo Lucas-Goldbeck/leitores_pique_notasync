@@ -175,7 +175,8 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     authRoot.innerHTML =
       '<section class="auth-screen confis-login-screen">' +
         '<article class="auth-card confis-login-card">' +
-          '<img class="confis-login-logo" src="./assets/confis-logo2.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
+          '<img class="confis-login-logo confis-login-logo-light" src="./assets/confis-logo2.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
+          '<img class="confis-login-logo confis-login-logo-dark" src="./assets/confis-logo.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
           '<h1 class="confis-login-title">Acessar o sistema</h1>' +
           '<p class="confis-login-subtitle">Informe suas credenciais para entrar no CONFIS.</p>' +
           (error ? '<div class="auth-error" role="alert">' + escapeHtml(error) + '</div>' : '') +
