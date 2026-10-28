@@ -59,19 +59,11 @@ body{
   display:flex;min-height:100%;
 }
 
-/* ══ Split layout ══ */
+/* ══ Centered layout ══ */
 .layout{display:flex;width:100%;min-height:100%;}
 
-/* ── Brand panel ── */
-.brand-panel{
-  flex:0 0 44%;
-  position:relative;
-  background:var(--sidebar);
-  overflow:hidden;
-  display:flex;flex-direction:column;
-  padding:44px max(40px,env(safe-area-inset-left,0px));
-  padding-right:40px;
-}
+/* ── Brand panel — hidden ── */
+.brand-panel{display:none;}
 
 #bgCanvas{
   position:absolute;inset:0;
@@ -168,9 +160,10 @@ body{
 
 /* ── Form panel ── */
 .form-panel{
-  flex:1;background:var(--form-bg);
+  flex:1;background:#ffffff;
   display:flex;align-items:center;justify-content:center;
-  padding:48px max(48px,env(safe-area-inset-right,0px));
+  padding:48px 24px;
+  min-height:100vh;
 }
 
 .form-wrap{
@@ -188,13 +181,10 @@ body{
   margin-bottom:28px;
 }
 .f-brand-frame{
-  display:grid;place-items:center;
-  width:min(160px,80%);
-  padding:10px 14px;
-  background:var(--sidebar);
-  border-radius:var(--radius-md);
+  display:flex;align-items:center;justify-content:center;
+  width:min(200px,80%);
 }
-.f-logo{display:block;width:100%;height:auto;}
+.f-logo{display:block;width:100%;height:auto;max-height:120px;object-fit:contain;}
 
 .f-title{
   font-family:'Sora','Manrope',sans-serif;
@@ -357,26 +347,11 @@ body{
 .f-copy{display:block;margin-top:6px;font-size:10.5px;color:var(--muted);}
 
 /* ── Responsive ── */
-@media(max-width:820px){
-  .layout{flex-direction:column;}
-  .brand-panel{
-    flex:0 0 auto;
-    padding:28px max(18px,env(safe-area-inset-left,0px));
-    padding-right:max(18px,env(safe-area-inset-right,0px));
-  }
-  .brand-rule,.brand-kicker,.brand-desc,.feature-list{display:none;}
-  .brand-h1{font-size:20px;margin-bottom:0;}
-  .brand-hero{margin-top:16px;padding-bottom:0;}
-  .brand-foot{margin-top:18px;padding-top:14px;}
-  .form-panel{
-    padding:32px max(18px,env(safe-area-inset-right,0px));
-    padding-left:max(18px,env(safe-area-inset-left,0px));
-    align-items:flex-start;
-  }
+@media(max-width:480px){
+  .form-panel{padding:24px 16px;align-items:flex-start;}
   .form-wrap{
-    max-width:100%;
     border-radius:var(--radius-md);
-    padding:28px 24px 24px;
+    padding:28px 20px 24px;
     box-shadow:0 2px 12px rgba(0,0,0,.06);
   }
 }
@@ -434,7 +409,7 @@ body{
       <!-- Logo no mobile / topo do form -->
       <div class="f-brand">
         <div class="f-brand-frame">
-          <img class="f-logo" src="LOGO_PLACEHOLDER" alt="CONFIS">
+          <img class="f-logo" src="assets/confis-logo.png" alt="CONFIS">
         </div>
       </div>
 
