@@ -59,10 +59,10 @@ body{
   display:flex;min-height:100%;
 }
 
-/* ══ Centered layout ══ */
+/* ══ Layout ══ */
 .layout{display:flex;width:100%;min-height:100%;}
 
-/* ── Brand panel — hidden ── */
+/* ── Brand panel — oculto ── */
 .brand-panel{display:none;}
 
 #bgCanvas{
@@ -181,10 +181,13 @@ body{
   margin-bottom:28px;
 }
 .f-brand-frame{
-  display:flex;align-items:center;justify-content:center;
-  width:min(200px,80%);
+  display:grid;place-items:center;
+  width:min(160px,80%);
+  padding:10px 14px;
+  background:var(--sidebar);
+  border-radius:var(--radius-md);
 }
-.f-logo{display:block;width:100%;height:auto;max-height:120px;object-fit:contain;}
+.f-logo{display:block;width:100%;height:auto;}
 
 .f-title{
   font-family:'Sora','Manrope',sans-serif;
@@ -347,7 +350,7 @@ body{
 .f-copy{display:block;margin-top:6px;font-size:10.5px;color:var(--muted);}
 
 /* ── Responsive ── */
-@media(max-width:480px){
+@media(max-width:540px){
   .form-panel{padding:24px 16px;align-items:flex-start;}
   .form-wrap{
     border-radius:var(--radius-md);
@@ -409,7 +412,7 @@ body{
       <!-- Logo no mobile / topo do form -->
       <div class="f-brand">
         <div class="f-brand-frame">
-          <img class="f-logo" src="assets/confis-logo.png" alt="CONFIS">
+          <img class="f-logo" src="LOGO_PLACEHOLDER" alt="CONFIS">
         </div>
       </div>
 
