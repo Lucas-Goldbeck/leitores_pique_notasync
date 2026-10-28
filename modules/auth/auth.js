@@ -149,7 +149,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     if (!auth.user) return;
     settingsNav.hidden = auth.user.role !== 'admin';
     const name = auth.user.nome || auth.user.username || 'Usuário';
-    const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'GS';
+    const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase() || 'CF';
     document.getElementById('authUserName').textContent = name;
     document.getElementById('authUserRole').textContent = roleLabel(auth.user.role);
     document.getElementById('authUserInitials').textContent = initials;
@@ -173,7 +173,9 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       <section class="auth-screen">
         <article class="auth-card">
           <div class="auth-brand">
-            <p>GCONT Gest\u00e3o Cont\u00e1bil</p>
+            <div class="auth-brand-logo-frame">
+              <img class="auth-logo" src="./assets/confis-logo.png" alt="CONFIS — Conferência Fiscal" />
+            </div>
           </div>
           <h1>Acesso ao painel</h1>
           <p class="auth-card-subtitle">Entre com seu usu\u00e1rio interno para acessar os leitores fiscais.</p>
@@ -221,7 +223,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     settingsMount.innerHTML = `
       <section class="settings-page">
         <header class="settings-page-header">
-          <div><span class="settings-kicker">GSync · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
+          <div><span class="settings-kicker">CONFIS · GCONT</span><h1>Configurações</h1><p>Crie e administre os acessos aos leitores fiscais.</p></div>
           <button class="settings-secondary-button" type="button" data-action="reload-users" ${settings.loading ? 'disabled' : ''}>${settings.loading ? 'Atualizando…' : 'Atualizar usuários'}</button>
         </header>
         ${settings.error ? `<div class="settings-alert" role="alert">${escapeHtml(settings.error)}</div>` : ''}

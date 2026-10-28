@@ -92,23 +92,11 @@ button {
 
 .brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 9px;
   padding: 2px 0;
 }
 
-
-
-.brand-subtitle {
-  margin: 0;
-  transform: none;
-  color: #b5b5b7;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
+.brand-logo { display: block; width: min(100%, 184px); height: auto; }
 
 .sidebar-bottom {
   display: grid;
@@ -297,7 +285,7 @@ button {
   :root { --sidebar-width: 76px; }
   .sidebar { align-items: center; padding: 18px 10px 14px; }
   .brand { align-items: center; padding: 0; }
-  .brand-subtitle { display: none; }
+  .brand-logo { display: none; }
   .sidebar-nav { width: 100%; margin-top: 18px; }
   .sidebar-nav-group { width: 100%; }
   .side-nav-link { justify-content: center; padding: 0; }
@@ -392,8 +380,9 @@ button {
 
 .auth-screen { display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 28px; background: var(--bg); }
 .auth-card { width: min(460px, 100%); padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: 0 14px 42px rgba(21, 24, 28, 0.09); }
-.auth-brand { display: grid; justify-items: start; gap: 10px; margin-bottom: 24px; }
-.auth-brand p { margin: 0; color: var(--text-secondary); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+.auth-brand { display: flex; justify-content: center; margin-bottom: 24px; }
+.auth-brand-logo-frame { display: grid; width: min(180px, 100%); place-items: center; padding: 8px; background: var(--sidebar); border-radius: 14px; }
+.auth-logo { display: block; width: 100%; height: auto; }
 .auth-card h1 { margin: 0; font-family: 'Sora', 'Manrope', sans-serif; font-size: 1.13rem; }
 .auth-card-subtitle { margin: 5px 0 0; color: var(--text-secondary); font-size: 0.76rem; line-height: 1.5; }
 .auth-login-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; margin-top: 17px; }

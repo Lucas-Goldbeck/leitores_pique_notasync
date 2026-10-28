@@ -1,8 +1,8 @@
 {
-  "name": "leitores-pique-notasync",
+  "name": "confis",
   "version": "0.1.0",
   "private": true,
-  "description": "Leitor XML 3.0 com processamento local de arquivos fiscais",
+  "description": "CONFIS — Conferência Fiscal com processamento local de arquivos fiscais",
   "scripts": {
     "setup:pdf": "npm rebuild libxmljs2",
     "start": "node server.cjs"

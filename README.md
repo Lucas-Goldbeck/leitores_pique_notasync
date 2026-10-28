@@ -1,8 +1,8 @@
-# Leitores Pique GSync
+# CONFIS
 
 Para hospedar com Docker no EasyPanel, siga o guia [EASYPANEL.md](EASYPANEL.md).
 
-Interface do Leitor XML 3.0, com a identidade visual do GSync GCONT.
+Interface do Leitor XML 3.0, com a identidade visual CONFIS — Conferência Fiscal.
 
 ## Iniciar
 
@@ -33,7 +33,7 @@ Em **Configurações**, o administrador também pode editar usuário, nome, perf
 - **DIFAL:** busca as NF-e enviadas e calcula o resultado com a alíquota interna informada.
 - **CST 060:** busca as NF-e enviadas e confere o ICMS ST usando a alíquota interna informada, com alíquota de 4% para pneus.
 
-Os quatro leitores aparecem como opções próprias no menu lateral, agrupados em **Leitor XML 3.0**, dentro da identidade **GCONT Gestão Contábil**. O importador compartilhado aceita múltiplos XMLs de NF-e, CT-e e NFS-e, além de arquivos de evento NF-e. Não é preciso selecionar empresa nem período: cada consulta parte dos XMLs enviados por upload. As consultas e conferências acontecem no navegador, e os arquivos importados ficam na memória da sessão. Ao atualizar ou fechar a página, eles são removidos. Para gerar uma DANFE, o XML da NF-e é enviado somente ao servidor local deste projeto, processado em memória pelo NFeWizard-io, e não é gravado em disco. O PDF fica temporariamente na pasta do sistema e é excluído depois de ser enviado ao navegador.
+Os quatro leitores aparecem como opções próprias no menu lateral, agrupados em **Leitor XML 3.0**, dentro da identidade **CONFIS — Conferência Fiscal**. O importador compartilhado aceita múltiplos XMLs de NF-e, CT-e e NFS-e, além de arquivos de evento NF-e. Não é preciso selecionar empresa nem período: cada consulta parte dos XMLs enviados por upload. As consultas e conferências acontecem no navegador, e os arquivos importados ficam na memória da sessão. Ao atualizar ou fechar a página, eles são removidos. Para gerar uma DANFE, o XML da NF-e é enviado somente ao servidor local deste projeto, processado em memória pelo NFeWizard-io, e não é gravado em disco. O PDF fica temporariamente na pasta do sistema e é excluído depois de ser enviado ao navegador.
 
 Os parsers e utilitários `xml-reader30-*` foram copiados do frontend NotaSync. A interface foi adaptada para upload local em vez de consulta ao acervo/API do NotaSync.
 
