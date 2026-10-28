@@ -181,11 +181,8 @@ body{
   margin-bottom:28px;
 }
 .f-brand-frame{
-  display:grid;place-items:center;
-  width:min(160px,80%);
-  padding:10px 14px;
-  background:var(--sidebar);
-  border-radius:var(--radius-md);
+  display:flex;align-items:center;justify-content:center;
+  width:min(180px,80%);
 }
 .f-logo{display:block;width:100%;height:auto;}
 
@@ -412,7 +409,7 @@ body{
       <!-- Logo no mobile / topo do form -->
       <div class="f-brand">
         <div class="f-brand-frame">
-          <img class="f-logo" src="LOGO_PLACEHOLDER" alt="CONFIS">
+          <img class="f-logo" src="assets/confis-logo.png" alt="CONFIS" onerror="this.src='';this.style.display='none'">
         </div>
       </div>
 
