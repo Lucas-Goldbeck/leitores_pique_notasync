@@ -1,4 +1,4 @@
-const AUTH_STORAGE_KEY = 'notasync:leitores-xml:auth:v1';
+﻿const AUTH_STORAGE_KEY = 'notasync:leitores-xml:auth:v1';
 const AUTH_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 const AUTH_ACTIVITY_PING_INTERVAL_MS = 60 * 1000;
 
@@ -13,6 +13,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   let authActivityPingPromise = null;
   let authGeneration = 0;
   let sessionEnding = false;
+  let cancelBrandAnimation = null;
 
   document.addEventListener('keydown', registerAuthInteraction, true);
   document.addEventListener('pointerdown', registerAuthInteraction, true);
@@ -89,6 +90,8 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   async function login(form) {
     sessionEnding = false;
     const loginGeneration = authGeneration;
+    const submitBtn = form.querySelector('[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('loading'); }
     const formData = new FormData(form);
     const username = String(formData.get('username') || '').trim();
     const password = String(formData.get('password') || '');
@@ -167,34 +170,128 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   }
 
   function renderLogin({ username = '', error = '', focus = true } = {}) {
+    if (cancelBrandAnimation) { cancelBrandAnimation(); cancelBrandAnimation = null; }
     appShell.hidden = true;
     authRoot.hidden = false;
     authRoot.innerHTML = `
-      <section class="auth-screen">
-        <article class="auth-card">
-          <div class="auth-brand">
-            <div class="auth-brand-logo-frame">
-              <img class="auth-logo" src="./assets/confis-logo.png" alt="CONFIS — Conferência Fiscal" />
+      <div class="auth-split">
+        <div class="auth-brand-panel">
+          <canvas class="auth-brand-canvas" id="authBrandCanvas"></canvas>
+          <div class="auth-brand-veil"></div>
+          <div class="auth-brand-body">
+            <div class="auth-brand-logo-wrap">
+              <img class="auth-brand-logo" src="./assets/confis-logo.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal">
+            </div>
+            <div class="auth-brand-rule"></div>
+            <div class="auth-brand-hero">
+              <div class="auth-brand-kicker">Confer\u00eancia Fiscal</div>
+              <h1 class="auth-brand-h1">Precis\u00e3o e controle<br>na sua <em>gest\u00e3o fiscal</em></h1>
+              <p class="auth-brand-desc">Leitura, confer\u00eancia e an\u00e1lise de XMLs fiscais com apura\u00e7\u00e3o autom\u00e1tica de tributos e obriga\u00e7\u00f5es acess\u00f3rias.</p>
+              <div class="auth-brand-features">
+                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Leitor NF-e, NFS-e fiscal e CT-e</div>
+                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Apura\u00e7\u00e3o de DIFAL e CST 060 autom\u00e1tica</div>
+                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Concilia\u00e7\u00e3o e confer\u00eancia em tempo real</div>
+                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Relat\u00f3rios e dashboards anal\u00edticos</div>
+              </div>
+            </div>
+            <div class="auth-brand-foot">
+              <div class="auth-secure-chip">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                Conex\u00e3o SSL criptografada
+              </div>
+              <span class="auth-ver">v3.2.1</span>
             </div>
           </div>
-          <h1>Acesso ao painel</h1>
-          <p class="auth-card-subtitle">Entre com seu usu\u00e1rio interno para acessar os leitores fiscais.</p>
-          ${error ? `<div class="auth-error" role="alert">${escapeHtml(error)}</div>` : ''}
-          <form id="authLoginForm" class="auth-login-form">
-            <div class="auth-login-fields">
+        </div>
+        <div class="auth-form-panel">
+          <div class="auth-form-inner">
+            <div class="auth-form-logo">
+              <div class="auth-form-logo-frame">
+                <img class="auth-form-logo-img" src="./assets/confis-logo.png" alt="CONFIS">
+              </div>
+            </div>
+            <h2 class="auth-form-title">Acessar o sistema</h2>
+            <p class="auth-form-sub">Informe suas credenciais para entrar no CONFIS.</p>
+            ${error ? `<div class="auth-error" role="alert">${escapeHtml(error)}</div>` : ''}
+            <form id="authLoginForm" novalidate>
               <label class="auth-field">Usu\u00e1rio
-                <input name="username" value="${escapeHtml(username)}" autocomplete="username" required />
+                <div class="auth-field-wrap">
+                  <input name="username" value="${escapeHtml(username)}" autocomplete="username" spellcheck="false" placeholder="usu\u00e1rio ou e-mail">
+                  <span class="auth-field-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                </div>
               </label>
               <label class="auth-field">Senha
-                <input name="password" type="password" autocomplete="current-password" required />
+                <div class="auth-field-wrap">
+                  <input name="password" type="password" autocomplete="current-password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" id="authPassInput">
+                  <button type="button" class="auth-field-icon" id="authPassToggle" aria-label="Mostrar senha">
+                    <svg id="authEyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg id="authEyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  </button>
+                </div>
               </label>
+              <div class="auth-split-options">
+                <label class="auth-check-row" for="authRemember">
+                  <input type="checkbox" id="authRemember">
+                  <div class="auth-check-box"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
+                  <span class="auth-check-lbl">Manter conectado</span>
+                </label>
+              </div>
+              <button class="auth-primary-button" type="submit">
+                <div class="auth-btn-loader"></div>
+                <span class="auth-btn-lbl">Entrar</span>
+                <svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </form>
+            <div class="auth-split-foot">
+              Precisa de acesso? <a href="#">Fale com o administrador</a>
+              <span class="auth-split-copy">\u00a9 2024 CONFIS \u00b7 Todos os direitos reservados</span>
             </div>
-            <div class="auth-login-actions"><button class="auth-primary-button" type="submit">Entrar</button></div>
-          </form>
-        </article>
-      </section>
+          </div>
+        </div>
+      </div>
     `;
     if (focus) authRoot.querySelector('input[name="username"]')?.focus();
+    const cv = document.getElementById('authBrandCanvas');
+    if (cv) {
+      const cx = cv.getContext('2d');
+      let dots = [], W = 0, H = 0, af;
+      const resize = () => {
+        W = cv.offsetWidth; H = cv.offsetHeight;
+        cv.width = W * devicePixelRatio; cv.height = H * devicePixelRatio;
+        cx.scale(devicePixelRatio, devicePixelRatio);
+        dots = Array.from({ length: Math.max(12, Math.floor(W * H / 10000)) }, () => ({
+          x: Math.random() * W, y: Math.random() * H,
+          vx: (Math.random() - .5) * .3, vy: (Math.random() - .5) * .3,
+          r: Math.random() * 1.3 + .4,
+        }));
+      };
+      const frame = () => {
+        cx.clearRect(0, 0, W, H);
+        dots.forEach(d => { d.x += d.vx; d.y += d.vy; if (d.x < 0 || d.x > W) d.vx *= -1; if (d.y < 0 || d.y > H) d.vy *= -1; });
+        for (let i = 0; i < dots.length; i++) {
+          for (let j = i + 1; j < dots.length; j++) {
+            const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y, d = Math.sqrt(dx * dx + dy * dy);
+            if (d < 110) { cx.beginPath(); cx.strokeStyle = `rgba(250,211,43,${(1 - d / 110) * .4})`; cx.lineWidth = .5; cx.moveTo(dots[i].x, dots[i].y); cx.lineTo(dots[j].x, dots[j].y); cx.stroke(); }
+          }
+          cx.beginPath(); cx.arc(dots[i].x, dots[i].y, dots[i].r, 0, Math.PI * 2); cx.fillStyle = 'rgba(250,211,43,.4)'; cx.fill();
+        }
+        af = requestAnimationFrame(frame);
+      };
+      const ro = new ResizeObserver(() => { cancelAnimationFrame(af); resize(); frame(); });
+      ro.observe(cv); resize(); frame();
+      cancelBrandAnimation = () => { cancelAnimationFrame(af); ro.disconnect(); };
+    }
+    const passInput = document.getElementById('authPassInput');
+    const passToggle = document.getElementById('authPassToggle');
+    if (passToggle && passInput) {
+      passToggle.addEventListener('click', () => {
+        const show = passInput.type === 'password';
+        passInput.type = show ? 'text' : 'password';
+        document.getElementById('authEyeOn').hidden = show;
+        document.getElementById('authEyeOff').hidden = !show;
+        passInput.focus();
+      });
+    }
   }
 
   async function loadUsers() {
