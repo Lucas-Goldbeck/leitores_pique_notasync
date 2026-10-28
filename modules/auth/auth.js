@@ -5,7 +5,7 @@ const AUTH_ACTIVITY_PING_INTERVAL_MS = 60 * 1000;
 export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount, settingsNav }) {
   if (!authRoot || !appShell || !readerMount || !settingsMount || !settingsNav) return;
 
-  const auth = { accessToken: '', refreshToken: '', user: null };
+  const auth = { accessToken: '', refreshToken: '', user: null, remember: false };
   const settings = { users: [], loading: false, creating: false, savingUser: false, deletingUser: false, error: '', success: '', resetUser: null, editingUser: null, deleteUser: null };
   let refreshPromise = null;
   let idleTimeout = null;
@@ -13,7 +13,6 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
   let authActivityPingPromise = null;
   let authGeneration = 0;
   let sessionEnding = false;
-  let cancelBrandAnimation = null;
 
   document.addEventListener('keydown', registerAuthInteraction, true);
   document.addEventListener('pointerdown', registerAuthInteraction, true);
@@ -95,8 +94,9 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     const formData = new FormData(form);
     const username = String(formData.get('username') || '').trim();
     const password = String(formData.get('password') || '');
+    auth.remember = Boolean(form.querySelector('#authRemember')?.checked);
     if (!username || !password) {
-      renderLogin({ username, error: 'Informe usuário e senha para entrar.' });
+      renderLogin({ username, error: 'Informe usuário e senha para entrar.', remember: auth.remember });
       return;
     }
 
@@ -169,118 +169,51 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     }
   }
 
-  function renderLogin({ username = '', error = '', focus = true } = {}) {
-    if (cancelBrandAnimation) { cancelBrandAnimation(); cancelBrandAnimation = null; }
+  function renderLogin({ username = '', error = '', focus = true, remember = auth.remember } = {}) {
     appShell.hidden = true;
     authRoot.hidden = false;
-    authRoot.innerHTML = `
-      <div class="auth-split">
-        <div class="auth-brand-panel">
-          <canvas class="auth-brand-canvas" id="authBrandCanvas"></canvas>
-          <div class="auth-brand-veil"></div>
-          <div class="auth-brand-body">
-            <div class="auth-brand-logo-wrap">
-              <img class="auth-brand-logo" src="./assets/confis-logo.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal">
-            </div>
-            <div class="auth-brand-rule"></div>
-            <div class="auth-brand-hero">
-              <div class="auth-brand-kicker">Confer\u00eancia Fiscal</div>
-              <h1 class="auth-brand-h1">Precis\u00e3o e controle<br>na sua <em>gest\u00e3o fiscal</em></h1>
-              <p class="auth-brand-desc">Leitura, confer\u00eancia e an\u00e1lise de XMLs fiscais com apura\u00e7\u00e3o autom\u00e1tica de tributos e obriga\u00e7\u00f5es acess\u00f3rias.</p>
-              <div class="auth-brand-features">
-                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Leitor NF-e, NFS-e fiscal e CT-e</div>
-                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Apura\u00e7\u00e3o de DIFAL e CST 060 autom\u00e1tica</div>
-                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Concilia\u00e7\u00e3o e confer\u00eancia em tempo real</div>
-                <div class="auth-brand-feature"><div class="auth-brand-dot"></div>Relat\u00f3rios e dashboards anal\u00edticos</div>
-              </div>
-            </div>
-            <div class="auth-brand-foot">
-              <div class="auth-secure-chip">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-                Conex\u00e3o SSL criptografada
-              </div>
-              <span class="auth-ver">v3.2.1</span>
-            </div>
-          </div>
-        </div>
-        <div class="auth-form-panel">
-          <div class="auth-form-inner">
-            <div class="auth-form-logo">
-              <div class="auth-form-logo-frame">
-                <img class="auth-form-logo-img" src="./assets/confis-logo2.png" alt="CONFIS — Conferência Fiscal">
-              </div>
-            </div>
-            <h2 class="auth-form-title">Acessar o sistema</h2>
-            <p class="auth-form-sub">Informe suas credenciais para entrar no CONFIS.</p>
-            ${error ? `<div class="auth-error" role="alert">${escapeHtml(error)}</div>` : ''}
-            <form id="authLoginForm" novalidate>
-              <label class="auth-field">Usu\u00e1rio
-                <div class="auth-field-wrap">
-                  <input name="username" value="${escapeHtml(username)}" autocomplete="username" spellcheck="false" placeholder="usu\u00e1rio ou e-mail">
-                  <span class="auth-field-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                </div>
-              </label>
-              <label class="auth-field">Senha
-                <div class="auth-field-wrap">
-                  <input name="password" type="password" autocomplete="current-password" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" id="authPassInput">
-                  <button type="button" class="auth-field-icon" id="authPassToggle" aria-label="Mostrar senha">
-                    <svg id="authEyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg id="authEyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  </button>
-                </div>
-              </label>
-              <div class="auth-split-options">
-                <label class="auth-check-row" for="authRemember">
-                  <input type="checkbox" id="authRemember">
-                  <div class="auth-check-box"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg></div>
-                  <span class="auth-check-lbl">Manter conectado</span>
-                </label>
-              </div>
-              <button class="auth-primary-button" type="submit">
-                <div class="auth-btn-loader"></div>
-                <span class="auth-btn-lbl">Entrar</span>
-                <svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              </button>
-            </form>
-            <div class="auth-split-foot">
-              Precisa de acesso? <a href="#">Fale com o administrador</a>
-              <span class="auth-split-copy">\u00a9 2024 CONFIS \u00b7 Todos os direitos reservados</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    authRoot.innerHTML =
+      '<section class="auth-screen confis-login-screen">' +
+        '<article class="auth-card confis-login-card">' +
+          '<img class="confis-login-logo" src="./assets/confis-logo2.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
+          '<h1 class="confis-login-title">Acessar o sistema</h1>' +
+          '<p class="confis-login-subtitle">Informe suas credenciais para entrar no CONFIS.</p>' +
+          (error ? '<div class="auth-error" role="alert">' + escapeHtml(error) + '</div>' : '') +
+          '<form id="authLoginForm" class="confis-login-form" novalidate>' +
+            '<label class="confis-login-field">Usu\u00e1rio' +
+              '<span class="confis-login-input-wrap">' +
+                '<input class="confis-login-input" name="username" type="text" value="' + escapeHtml(username) + '" autocomplete="username" spellcheck="false" required />' +
+                '<span class="confis-login-input-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>' +
+              '</span>' +
+            '</label>' +
+            '<label class="confis-login-field">Senha' +
+              '<span class="confis-login-input-wrap">' +
+                '<input class="confis-login-input" name="password" type="password" autocomplete="current-password" id="authPassInput" required />' +
+                '<button type="button" class="confis-login-input-icon" id="authPassToggle" aria-label="Mostrar senha">' +
+                  '<svg id="authEyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+                  '<svg id="authEyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>' +
+                '</button>' +
+              '</span>' +
+            '</label>' +
+            '<div class="confis-login-options">' +
+              '<label class="confis-login-remember" for="authRemember">' +
+                '<input type="checkbox" id="authRemember"' + (remember ? ' checked' : '') + ' />' +
+                '<span class="confis-login-checkbox" aria-hidden="true"></span>' +
+                '<span>Manter conectado</span>' +
+              '</label>' +
+              '<button class="confis-login-link" type="button" id="authForgotPassword">Esqueci a senha</button>' +
+            '</div>' +
+            '<p class="confis-login-notice" id="authLoginNotice" hidden>Para redefinir sua senha, fale com o administrador.</p>' +
+            '<button class="auth-primary-button confis-login-submit" type="submit">' +
+              '<span class="auth-btn-loader" aria-hidden="true"></span>' +
+              '<span class="auth-btn-lbl">Entrar</span>' +
+              '<svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
+            '</button>' +
+          '</form>' +
+          '<footer class="confis-login-footer">Precisa de acesso? <button type="button" class="confis-login-link" id="authContactAdmin">Fale com o administrador</button><span>\u00a9 2026 CONFIS \u00b7 Todos os direitos reservados</span></footer>' +
+        '</article>' +
+      '</section>';
     if (focus) authRoot.querySelector('input[name="username"]')?.focus();
-    const cv = document.getElementById('authBrandCanvas');
-    if (cv) {
-      const cx = cv.getContext('2d');
-      let dots = [], W = 0, H = 0, af;
-      const resize = () => {
-        W = cv.offsetWidth; H = cv.offsetHeight;
-        cv.width = W * devicePixelRatio; cv.height = H * devicePixelRatio;
-        cx.scale(devicePixelRatio, devicePixelRatio);
-        dots = Array.from({ length: Math.max(12, Math.floor(W * H / 10000)) }, () => ({
-          x: Math.random() * W, y: Math.random() * H,
-          vx: (Math.random() - .5) * .3, vy: (Math.random() - .5) * .3,
-          r: Math.random() * 1.3 + .4,
-        }));
-      };
-      const frame = () => {
-        cx.clearRect(0, 0, W, H);
-        dots.forEach(d => { d.x += d.vx; d.y += d.vy; if (d.x < 0 || d.x > W) d.vx *= -1; if (d.y < 0 || d.y > H) d.vy *= -1; });
-        for (let i = 0; i < dots.length; i++) {
-          for (let j = i + 1; j < dots.length; j++) {
-            const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y, d = Math.sqrt(dx * dx + dy * dy);
-            if (d < 110) { cx.beginPath(); cx.strokeStyle = `rgba(250,211,43,${(1 - d / 110) * .4})`; cx.lineWidth = .5; cx.moveTo(dots[i].x, dots[i].y); cx.lineTo(dots[j].x, dots[j].y); cx.stroke(); }
-          }
-          cx.beginPath(); cx.arc(dots[i].x, dots[i].y, dots[i].r, 0, Math.PI * 2); cx.fillStyle = 'rgba(250,211,43,.4)'; cx.fill();
-        }
-        af = requestAnimationFrame(frame);
-      };
-      const ro = new ResizeObserver(() => { cancelAnimationFrame(af); resize(); frame(); });
-      ro.observe(cv); resize(); frame();
-      cancelBrandAnimation = () => { cancelAnimationFrame(af); ro.disconnect(); };
-    }
     const passInput = document.getElementById('authPassInput');
     const passToggle = document.getElementById('authPassToggle');
     if (passToggle && passInput) {
@@ -292,6 +225,12 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         passInput.focus();
       });
     }
+    const showLoginNotice = () => {
+      const notice = document.getElementById('authLoginNotice');
+      if (notice) notice.hidden = false;
+    };
+    document.getElementById('authForgotPassword')?.addEventListener('click', showLoginNotice);
+    document.getElementById('authContactAdmin')?.addEventListener('click', showLoginNotice);
   }
 
   async function loadUsers() {
@@ -690,6 +629,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     auth.accessToken = '';
     auth.refreshToken = '';
     auth.user = null;
+    auth.remember = false;
     resetSettingsState();
     settingsMount.replaceChildren();
     settingsMount.hidden = true;
@@ -701,7 +641,10 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
 
   function persistAuth() {
     try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+      const destination = auth.remember ? localStorage : sessionStorage;
+      const secondary = auth.remember ? sessionStorage : localStorage;
+      secondary.removeItem(AUTH_STORAGE_KEY);
+      destination.setItem(AUTH_STORAGE_KEY, JSON.stringify({
         accessToken: auth.accessToken,
         refreshToken: auth.refreshToken,
         user: auth.user
@@ -711,13 +654,23 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
 
   function readStoredAuth() {
     try {
-      const value = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null');
-      if (!value || typeof value !== 'object') return null;
-      return {
-        accessToken: String(value.accessToken || ''),
-        refreshToken: String(value.refreshToken || ''),
-        user: value.user && typeof value.user === 'object' ? value.user : null
-      };
+      const persistentValue = localStorage.getItem(AUTH_STORAGE_KEY);
+      const temporaryValue = sessionStorage.getItem(AUTH_STORAGE_KEY);
+      for (const [storedValue, remember] of [[persistentValue, true], [temporaryValue, false]]) {
+        if (!storedValue) continue;
+        try {
+          const value = JSON.parse(storedValue);
+          if (value && typeof value === 'object') {
+            return {
+              accessToken: String(value.accessToken || ''),
+              refreshToken: String(value.refreshToken || ''),
+              user: value.user && typeof value.user === 'object' ? value.user : null,
+              remember
+            };
+          }
+        } catch {}
+      }
+      return null;
     } catch {
       clearStoredAuth();
       return null;
@@ -726,6 +679,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
 
   function clearStoredAuth() {
     try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
+    try { sessionStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
   }
 
   function resetSettingsState() {
