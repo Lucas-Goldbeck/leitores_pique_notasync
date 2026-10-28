@@ -14,9 +14,10 @@
   --bg:            #fefefe;
   --surface:       #ffffff;
   --surface-alt:   #f6f6f8;
-  --sidebar:       #201e1e;
-  --sidebar-soft:  #2a2727;
-  --sidebar-bd:    #343232;
+  --sidebar:       #16202e;
+  --sidebar-soft:  #1d2a3c;
+  --sidebar-bd:    #283547;
+  --form-bg:       #f4f6f9;
   --text:          #201e1e;
   --text-sec:      #606062;
   --muted:         #8a8a8d;
@@ -46,6 +47,7 @@
   --muted:        #8b8896;
   --line:         #322f3b;
   --line-s:       #454250;
+  --form-bg:      var(--bg);
   color-scheme: dark;
 }
 
@@ -166,12 +168,19 @@ body{
 
 /* ── Form panel ── */
 .form-panel{
-  flex:1;background:var(--surface);
+  flex:1;background:var(--form-bg);
   display:flex;align-items:center;justify-content:center;
   padding:48px max(48px,env(safe-area-inset-right,0px));
 }
 
-.form-wrap{width:100%;max-width:390px;}
+.form-wrap{
+  width:100%;max-width:400px;
+  background:var(--surface);
+  border-radius:var(--radius-lg);
+  padding:44px 44px 38px;
+  box-shadow:0 2px 8px rgba(0,0,0,.04),0 10px 36px rgba(0,0,0,.08);
+  border:1px solid rgba(0,0,0,.055);
+}
 
 /* Header */
 .f-brand{
@@ -252,6 +261,26 @@ body{
   transition:color .14s;
 }
 .field-icon:hover{color:var(--text);}
+.field-icon:focus-visible{
+  color:var(--text);
+  outline:2px solid var(--accent-dk);
+  outline-offset:1px;
+  border-radius:6px;
+}
+
+/* Keyboard focus — all interactive elements */
+:where(a,button):focus-visible{
+  outline:2px solid var(--accent-dk);
+  outline-offset:2px;
+  border-radius:4px;
+}
+.auth-input:focus-visible{outline:none;}
+
+/* Checkbox keyboard focus */
+.check-row:focus-within .check-box{
+  box-shadow:0 0 0 3px var(--accent-glow);
+  border-color:var(--accent-dk);
+}
 
 /* Options */
 .f-options{
@@ -344,7 +373,12 @@ body{
     padding-left:max(18px,env(safe-area-inset-left,0px));
     align-items:flex-start;
   }
-  .form-wrap{max-width:100%;}
+  .form-wrap{
+    max-width:100%;
+    border-radius:var(--radius-md);
+    padding:28px 24px 24px;
+    box-shadow:0 2px 12px rgba(0,0,0,.06);
+  }
 }
 
 @media(prefers-reduced-motion:reduce){
@@ -407,7 +441,7 @@ body{
       <h2 class="f-title">Acessar o sistema</h2>
       <p class="f-sub">Informe suas credenciais para entrar no CONFIS.</p>
 
-      <div class="f-error" id="fErr">
+      <div class="f-error" id="fErr" role="alert" aria-live="assertive">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>Usuário ou senha incorretos. Verifique e tente novamente.</span>
       </div>
@@ -419,7 +453,8 @@ body{
           <div class="field-wrap">
             <input class="auth-input" type="text" id="email" name="email"
                    placeholder="usuario@empresa.com.br"
-                   autocomplete="username" spellcheck="false">
+                   autocomplete="username" spellcheck="false"
+                   aria-required="true" aria-describedby="fErr">
             <span class="field-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </span>
@@ -431,7 +466,8 @@ body{
           <div class="field-wrap">
             <input class="auth-input" type="password" id="pass" name="password"
                    placeholder="••••••••"
-                   autocomplete="current-password">
+                   autocomplete="current-password"
+                   aria-required="true" aria-describedby="fErr">
             <button type="button" class="field-icon" id="togglePass" aria-label="Mostrar senha">
               <svg id="eyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               <svg id="eyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
