@@ -1191,16 +1191,19 @@ button {
 .auth-screen.confis-login-screen {
   display: flex;
   min-height: 100vh;
-  align-items: flex-start;
+  min-height: 100dvh;
+  align-items: center;
   justify-content: center;
-  padding: 2px 16px 24px;
+  padding: 24px 16px;
   overflow-y: auto;
   background: #fff;
+  color-scheme: light;
 }
 .auth-card.confis-login-card {
   width: min(400px, 100%);
   padding: 60px 44px 22px;
   color: #201e1e;
+  color-scheme: light;
   background: #fff;
   border: 1px solid #ededed;
   border-radius: 18px;
@@ -1212,7 +1215,11 @@ button {
 .confis-login-form { display: grid; gap: 14px; }
 .confis-login-field { display: grid; min-width: 0; gap: 6px; color: #50555e; font-size: 11.5px; font-weight: 700; }
 .confis-login-input-wrap { position: relative; display: block; }
-.confis-login-input { width: 100%; height: 42px; padding: 0 42px 0 12px; color: #201e1e; background: #e8f0fe; border: 1px solid #cdd5e1; border-radius: 12px; font: inherit; font-size: 13.5px; }
+.confis-login-input { width: 100%; height: 42px; padding: 0 42px 0 12px; color: #201e1e; color-scheme: light; background: #e8f0fe; border: 1px solid #cdd5e1; border-radius: 12px; font: inherit; font-size: 13.5px; }
+.confis-login-input:-webkit-autofill,
+.confis-login-input:-webkit-autofill:hover,
+.confis-login-input:-webkit-autofill:focus,
+.confis-login-input:autofill { -webkit-text-fill-color: #201e1e; -webkit-box-shadow: 0 0 0 1000px #e8f0fe inset; box-shadow: 0 0 0 1000px #e8f0fe inset; }
 .confis-login-input:focus { outline: 2px solid rgba(215, 178, 20, .28); border-color: #d7b214; }
 .confis-login-input-icon { position: absolute; top: 50%; right: 12px; display: flex; align-items: center; justify-content: center; padding: 3px; color: #858b95; background: transparent; border: 0; border-radius: 6px; transform: translateY(-50%); }
 button.confis-login-input-icon { cursor: pointer; }
@@ -1235,7 +1242,7 @@ button.confis-login-input-icon { cursor: pointer; }
 .auth-screen.confis-login-screen .auth-error { margin: 0 0 4px; color: #9a2d2d; }
 
 @media (max-width: 540px) {
-  .auth-screen.confis-login-screen { padding: 8px 16px 20px; }
+  .auth-screen.confis-login-screen { padding: 20px 16px; }
   .auth-card.confis-login-card { padding: 32px 24px 22px; }
   .confis-login-logo { width: min(150px, 72%); margin-bottom: 24px; }
 }
