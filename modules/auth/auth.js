@@ -174,13 +174,14 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     authRoot.hidden = false;
     authRoot.innerHTML =
       '<section class="confis-login-screen">' +
-        '<div class="confis-brand" aria-hidden="true">' +
-          '<div class="confis-brand-pts" id="confisLoginPts"></div>' +
+        '<div class="confis-brand">' +
+          '<div class="confis-brand-pts" id="confisLoginPts" aria-hidden="true"></div>' +
           '<div class="confis-brand-content">' +
             '<div class="confis-brand-logo">' +
               '<img class="confis-login-logo confis-login-logo-light" src="./assets/confis-logo2.png" alt="CONFIS" />' +
               '<img class="confis-login-logo confis-login-logo-dark" src="./assets/confis-logo.png" alt="CONFIS" />' +
             '</div>' +
+            '<div class="confis-brand-kicker"><span aria-hidden="true"></span> CONFERÊNCIA FISCAL INTELIGENTE</div>' +
             '<p class="confis-brand-headline">Fiscalidade com <em>intelig\u00eancia</em><br>e precis\u00e3o total</p>' +
             '<p class="confis-brand-desc">Automatize a confer\u00eancia de NF-e, SPED e obriga\u00e7\u00f5es acess\u00f3rias. Reduza erros com visibilidade total.</p>' +
             '<ul class="confis-brand-feats">' +
@@ -188,13 +189,16 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
               '<li><span class="confis-feat-dot"></span>Alertas em tempo real de diverg\u00eancias</li>' +
               '<li><span class="confis-feat-dot"></span>Relat\u00f3rios com rastreabilidade completa</li>' +
             '</ul>' +
+            '<div class="confis-brand-modules"><span class="confis-brand-modules-label">LEITORES DISPON\u00cdVEIS</span><div><span>NF-e</span><span>NFS-e</span><span>DIFAL</span><span>CST 060</span></div></div>' +
+            '<div class="confis-brand-trust"><span class="confis-brand-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6v5.5c0 4.7-3.2 7.8-8 9.5-4.8-1.7-8-4.8-8-9.5V6l8-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.5 12 2.3 2.3 4.8-4.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><strong>Controle e clareza para sua rotina fiscal</strong><small>Seus leitores organizados em um só lugar.</small></span></div>' +
           '</div>' +
         '</div>' +
         '<article class="confis-login-card">' +
           '<div class="confis-login-formbox">' +
             '<div class="confis-login-formhead">' +
-              '<h1 class="confis-login-title">Bem-vindo</h1>' +
-              '<p class="confis-login-subtitle">Acesse sua conta para continuar</p>' +
+              '<span class="confis-login-kicker"><span aria-hidden="true"></span> ÁREA DO USUÁRIO</span>' +
+              '<h1 class="confis-login-title">Bem-vindo de volta</h1>' +
+              '<p class="confis-login-subtitle">Entre na sua conta para acessar seu ambiente fiscal.</p>' +
             '</div>' +
             (error ? '<div class="auth-error" role="alert">' + escapeHtml(error) + '</div>' : '') +
             '<form id="authLoginForm" class="confis-login-form" novalidate>' +
@@ -228,6 +232,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
                 '<svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
               '</button>' +
             '</form>' +
+            '<div class="confis-login-access-note"><span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M8 10V7a4 4 0 1 1 8 0v3m-4 4v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><span>Acesso individual para usuários autorizados.</span></div>' +
             '<footer class="confis-login-footer">Precisa de acesso? <button type="button" class="confis-login-link" id="authContactAdmin">Fale com o administrador</button><span>\u00a9 2026 CONFIS \u00b7 Todos os direitos reservados</span></footer>' +
           '</div>' +
         '</article>' +
