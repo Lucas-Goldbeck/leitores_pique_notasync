@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS app_private.users (
   id uuid PRIMARY KEY,
   username text NOT NULL UNIQUE,
   nome text NOT NULL DEFAULT '',
+  email text NOT NULL DEFAULT '',
   role text NOT NULL CHECK (role IN ('admin', 'comum')),
   ativo boolean NOT NULL DEFAULT true,
   password_salt text NOT NULL,
@@ -15,6 +16,9 @@ CREATE TABLE IF NOT EXISTS app_private.users (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE app_private.users
+  ADD COLUMN IF NOT EXISTS email text NOT NULL DEFAULT '';
 
 REVOKE ALL ON TABLE app_private.users FROM PUBLIC;
 

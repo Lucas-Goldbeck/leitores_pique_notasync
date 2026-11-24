@@ -338,6 +338,7 @@ function requireAdmin(response, user) {
 
 async function createUser(response, body) {
   const username = normalizeUsername(body.username);
+  const email = normalizeEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
   const role = body.role === 'admin' ? 'admin' : body.role === 'comum' ? 'comum' : '';
   if (!/^[a-z0-9._-]{3,80}$/i.test(username)) {
@@ -352,6 +353,10 @@ async function createUser(response, body) {
     sendJson(response, 400, { message: 'Selecione um perfil válido.' });
     return;
   }
+  if (!isValidEmail(email)) {
+    sendJson(response, 400, { message: 'Informe um e-mail válido.' });
+    return;
+  }
   if (users.some((entry) => entry.username === username)) {
     sendJson(response, 409, { message: 'Este usuário já existe.' });
     return;
@@ -363,6 +368,7 @@ async function createUser(response, body) {
     id: crypto.randomUUID(),
     username,
     nome: String(body.nome || '').trim(),
+    email,
     role,
     ativo: body.ativo !== false,
     passwordSalt,
@@ -391,6 +397,7 @@ async function updateUser(response, actor, userId, body) {
   const nextRole = body.role === undefined ? user.role : body.role;
   const nextAtivo = body.ativo === undefined ? user.ativo : Boolean(body.ativo);
   let nextUsername;
+  let nextEmail;
   if (!['admin', 'comum'].includes(nextRole)) {
     sendJson(response, 400, { message: 'Selecione um perfil válido.' });
     return;
@@ -407,11 +414,20 @@ async function updateUser(response, actor, userId, body) {
     }
     nextUsername = username;
   }
+  if (body.email !== undefined) {
+    const email = normalizeEmail(body.email);
+    if (!isValidEmail(email)) {
+      sendJson(response, 400, { message: 'Informe um e-mail válido.' });
+      return;
+    }
+    nextEmail = email;
+  }
   if (isActiveAdmin(user) && !(nextAtivo && nextRole === 'admin') && !hasOtherActiveAdmin(user.id)) {
     sendJson(response, 400, { message: 'Mantenha pelo menos um administrador ativo no sistema.' });
     return;
   }
   if (nextUsername !== undefined) user.username = nextUsername;
+  if (nextEmail !== undefined) user.email = nextEmail;
   if (body.ativo !== undefined) user.ativo = nextAtivo;
   if (body.nome !== undefined) user.nome = String(body.nome || '').trim();
   if (body.role !== undefined) {
@@ -506,6 +522,7 @@ function authenticatedUser(user, session) {
     userId: user.id,
     username: user.username,
     nome: user.nome || undefined,
+    email: user.email || undefined,
     role: user.role,
     sessionId: session.id,
     sessionExpiresAt: new Date(session.expiresAt).toISOString()
@@ -518,6 +535,7 @@ function publicUser(user) {
     id: user.id,
     username: user.username,
     nome: user.nome || undefined,
+    email: user.email || undefined,
     role: user.role,
     ativo: user.ativo,
     ultimoLoginAt: user.ultimoLoginAt,
@@ -624,7 +642,7 @@ async function initializeAuthStorage() {
     WHERE ended_at IS NULL
   `);
   const result = await databasePool.query(`
-    SELECT id, username, nome, role, ativo, password_salt, password_hash,
+    SELECT id, username, nome, email, role, ativo, password_salt, password_hash,
            ultimo_login_at, tempo_logado_ms, password_changed_at, created_at, updated_at
     FROM app_private.users
     ORDER BY created_at, id
@@ -650,12 +668,13 @@ async function persistDatabaseUsers(userEntries) {
     for (const user of userEntries) {
       await client.query(`
         INSERT INTO app_private.users (
-          id, username, nome, role, ativo, password_salt, password_hash,
+          id, username, nome, email, role, ativo, password_salt, password_hash,
           ultimo_login_at, tempo_logado_ms, password_changed_at, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (id) DO UPDATE SET
           username = EXCLUDED.username,
           nome = EXCLUDED.nome,
+          email = EXCLUDED.email,
           role = EXCLUDED.role,
           ativo = EXCLUDED.ativo,
           password_salt = EXCLUDED.password_salt,
@@ -668,6 +687,7 @@ async function persistDatabaseUsers(userEntries) {
         user.id,
         user.username,
         user.nome || '',
+        user.email || '',
         user.role,
         user.ativo,
         user.passwordSalt,
@@ -711,6 +731,7 @@ function userFromDatabase(row) {
     id: row.id,
     username: row.username,
     nome: row.nome || '',
+    email: row.email || '',
     role: row.role,
     ativo: row.ativo,
     passwordSalt: row.password_salt,
@@ -760,6 +781,14 @@ function verifyPassword(password, salt, expectedHash) {
 
 function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim();
+}
+
+function isValidEmail(email) {
+  return email === '' || (email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
 }
 
 function createToken() {

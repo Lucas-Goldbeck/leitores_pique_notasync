@@ -363,7 +363,7 @@ button {
 .settings-table td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .settings-table tbody tr:last-child td { border-bottom: 0; }
 .settings-table td:first-child strong { display: block; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.settings-table td:first-child small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.61rem; }
+.settings-table td:first-child small { display: block; max-width: 230px; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 0.61rem; text-overflow: ellipsis; white-space: nowrap; }
 .settings-role-badge, .settings-state { display: inline-flex; padding: 4px 8px; color: var(--text-secondary); background: var(--surface-alt); border: 1px solid var(--line); border-radius: 999px; font-size: 0.6rem; font-weight: 800; white-space: nowrap; }
 .settings-role-badge.is-admin { color: #725d00; background: rgba(250, 211, 43, 0.18); border-color: rgba(215, 178, 20, 0.38); }
 .settings-state.is-active { color: #087747; background: rgba(31, 157, 103, 0.12); border-color: rgba(31, 157, 103, 0.28); }

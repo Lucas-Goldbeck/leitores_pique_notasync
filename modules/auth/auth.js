@@ -271,6 +271,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
             <form id="createAccessForm" class="settings-form">
               <label>Usuário<input name="username" minlength="3" maxlength="80" pattern="[A-Za-z0-9._-]+" autocomplete="off" required placeholder="ex.: maria.silva" /></label>
               <label>Nome<input name="nome" maxlength="120" autocomplete="name" placeholder="Nome da pessoa" /></label>
+              <label>E-mail<input name="email" type="email" maxlength="254" autocomplete="email" placeholder="nome@exemplo.com" /></label>
               <label>Perfil<select name="role"><option value="comum">Usuário comum</option><option value="admin">Administrador</option></select></label>
               <label>Senha inicial<input name="password" type="password" autocomplete="new-password" required placeholder="Defina uma senha" /></label>
               <label class="settings-checkbox"><input name="ativo" type="checkbox" checked /><span>Acesso ativo</span></label>
@@ -285,7 +286,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
                 ${settings.users.map((user) => {
                   const self = user.id === auth.user.userId;
                   return `<tr>
-                    <td><strong>${escapeHtml(user.nome || user.username)}</strong><small>${escapeHtml(user.username)}</small></td>
+                    <td><strong>${escapeHtml(user.nome || user.username)}</strong><small>${escapeHtml(user.username)}</small>${user.email ? `<small>${escapeHtml(user.email)}</small>` : ''}</td>
                     <td><span class="settings-role-badge ${user.role === 'admin' ? 'is-admin' : ''}">${escapeHtml(roleLabel(user.role))}</span></td>
                     <td><span class="settings-state ${user.ativo ? 'is-active' : 'is-inactive'}">${user.ativo ? 'Ativo' : 'Inativo'}</span></td>
                     <td>${escapeHtml(formatDuration(user.tempoLogadoMs))}${user.conectadoAgora ? '<small class="settings-login-live">Conectado agora</small>' : ''}</td>
@@ -314,6 +315,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       <form id="editAccessForm" class="settings-form">
         <label>Usuário<input name="username" minlength="3" maxlength="80" pattern="[A-Za-z0-9._-]+" autocomplete="off" required value="${escapeHtml(user.username)}" /></label>
         <label>Nome<input name="nome" maxlength="120" autocomplete="name" value="${escapeHtml(user.nome || '')}" placeholder="Nome da pessoa" /></label>
+        <label>E-mail<input name="email" type="email" maxlength="254" autocomplete="email" value="${escapeHtml(user.email || '')}" placeholder="nome@exemplo.com" /></label>
         <label>Perfil<select name="role"><option value="comum" ${user.role === 'comum' ? 'selected' : ''}>Usuário comum</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrador</option></select></label>
         <label class="settings-checkbox"><input name="ativo" type="checkbox" ${user.ativo ? 'checked' : ''} /><span>Acesso ativo</span></label>
         <div class="settings-modal-actions settings-edit-actions"><button class="settings-danger-button" type="button" data-action="request-delete-edit" ${settings.savingUser ? 'disabled' : ''}>Excluir usuário</button><div><button class="settings-secondary-button" type="button" data-action="cancel-edit" ${settings.savingUser ? 'disabled' : ''}>Cancelar</button><button class="auth-primary-button" type="submit" ${settings.savingUser ? 'disabled' : ''}>${settings.savingUser ? 'Salvando…' : 'Salvar alterações'}</button></div></div>
@@ -352,6 +354,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
           body: {
             username: String(data.get('username') || '').trim(),
             nome: String(data.get('nome') || '').trim() || undefined,
+            email: String(data.get('email') || '').trim(),
             password: String(data.get('password') || ''),
             role: String(data.get('role') || 'comum'),
             ativo: data.get('ativo') === 'on'
@@ -417,6 +420,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
       const changes = {
         username: String(data.get('username') || '').trim(),
         nome: String(data.get('nome') || '').trim(),
+        email: String(data.get('email') || '').trim(),
         role: String(data.get('role') || 'comum'),
         ativo: data.get('ativo') === 'on'
       };
@@ -438,6 +442,7 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
         if (user.id === actingAdminId) {
           auth.user.username = updated.username;
           auth.user.nome = updated.nome;
+          auth.user.email = updated.email;
           auth.user.role = updated.role;
           syncUserIdentity();
           persistAuth();
