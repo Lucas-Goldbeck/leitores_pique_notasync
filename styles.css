@@ -1192,65 +1192,183 @@ button {
   .auth-form-inner { max-width: 100%; }
 }
 
-.auth-screen.confis-login-screen {
+/* ===== CONFIS LOGIN — split layout #1c1c24 / #fcd42c ===== */
+.confis-login-screen {
   display: flex;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow: hidden;
+}
+
+/* --- Brand panel (left 54%) --- */
+.confis-brand {
+  flex: 0 0 54%;
+  position: relative;
+  background: #1c1c24;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
-  overflow-y: auto;
-  background: var(--bg);
+  overflow: hidden;
 }
-.auth-card.confis-login-card {
-  width: min(400px, 100%);
-  padding: 60px 44px 22px;
-  color: var(--text-primary);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .04), 0 10px 36px rgba(0, 0, 0, .08);
+.confis-brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(252,212,44,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(252,212,44,.06) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 85% at 45% 50%, black 25%, transparent 100%);
+  mask-image:         radial-gradient(ellipse 85% 85% at 45% 50%, black 25%, transparent 100%);
+  pointer-events: none;
 }
-.confis-login-logo { display: block; width: min(158px, 72%); height: auto; margin: 0 auto 36px; }
+.confis-brand::after {
+  content: '';
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(252,212,44,.11) 0%, transparent 65%);
+  top: 50%; left: 48%;
+  transform: translate(-50%,-50%);
+  animation: confisGlow 5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes confisGlow {
+  0%,100% { opacity:.6; transform:translate(-50%,-50%) scale(1); }
+  50%      { opacity:1;  transform:translate(-50%,-50%) scale(1.1); }
+}
+.confis-brand-pts { position: absolute; inset: 0; pointer-events: none; }
+.confis-pt {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: #fcd42c;
+  animation: confisRise linear infinite;
+}
+@keyframes confisRise {
+  0%   { opacity:0; transform:translateY(0) scale(0); }
+  8%   { opacity:.5; }
+  92%  { opacity:.18; }
+  100% { opacity:0; transform:translateY(-90vh) scale(.4); }
+}
+.confis-brand-content {
+  position: relative;
+  z-index: 2;
+  max-width: 460px;
+  padding: 0 2.5rem 0 3.5rem;
+}
+.confis-brand-logo { margin-bottom: 2.75rem; }
+.confis-login-logo { display: block; width: min(170px, 80%); height: auto; }
 .confis-login-logo-dark { display: none; }
-.auth-card .confis-login-title { margin: 0 0 6px; color: var(--text-primary); font-family: 'Sora', 'Manrope', sans-serif; font-size: 22px; font-weight: 800; line-height: 1.22; letter-spacing: -.025em; text-align: center; }
-.confis-login-subtitle { margin: 0 0 28px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; text-align: center; }
-.confis-login-form { display: grid; gap: 14px; }
-.confis-login-field { display: grid; min-width: 0; gap: 6px; color: var(--text-secondary); font-size: 11.5px; font-weight: 700; }
+.confis-brand-headline {
+  font-family: 'Sora', 'Manrope', sans-serif;
+  font-size: clamp(1.75rem, 3vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: #ece9f1;
+  margin: 0 0 1rem;
+  text-wrap: balance;
+}
+.confis-brand-headline em {
+  font-style: normal;
+  background: linear-gradient(90deg, #fcd42c, #f5a000);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.confis-brand-desc { font-size: .925rem; color: #6a6a7e; line-height: 1.65; margin: 0 0 2.25rem; max-width: 380px; }
+.confis-brand-feats { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.confis-brand-feats li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: rgba(252,212,44,.04);
+  border: 1px solid rgba(252,212,44,.1);
+  border-radius: 10px;
+  font-size: .85rem; color: #8e8ea8;
+  transition: border-color .25s;
+}
+.confis-brand-feats li:hover { border-color: rgba(252,212,44,.28); }
+.confis-feat-dot { width: 7px; height: 7px; border-radius: 50%; background: #fcd42c; box-shadow: 0 0 8px rgba(252,212,44,.65); flex-shrink: 0; }
+
+/* --- Form panel (right 46%) --- */
+.confis-login-card {
+  flex: 0 0 46%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 3.5rem;
+  background: #202029;
+  position: relative;
+  overflow: hidden;
+}
+.confis-login-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 55% 50% at 20% 55%, rgba(252,212,44,.05) 0%, transparent 65%);
+  pointer-events: none;
+}
+.confis-login-card::after {
+  content: '';
+  position: absolute; left: 0; top: 10%; bottom: 10%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(252,212,44,.12) 20%, rgba(252,212,44,.12) 80%, transparent);
+}
+.confis-login-formbox { width: 100%; max-width: 360px; position: relative; z-index: 1; }
+.confis-login-formhead { margin-bottom: 2rem; }
+.confis-login-title { margin: 0 0 5px; font-family: 'Sora', 'Manrope', sans-serif; font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; color: #ece9f1; line-height: 1.1; }
+.confis-login-subtitle { margin: 0; color: #6a6a7e; font-size: .875rem; line-height: 1.5; }
+.confis-login-form { display: grid; gap: 13px; }
+.confis-login-field { display: grid; min-width: 0; gap: 6px; color: #8a8a9e; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; }
 .confis-login-input-wrap { position: relative; display: block; }
-.confis-login-input { width: 100%; height: 42px; padding: 0 42px 0 12px; color: var(--text-primary); background: var(--login-field-bg); border: 1px solid var(--line-strong); border-radius: 12px; font: inherit; font-size: 13.5px; }
+.confis-login-input { width: 100%; height: 44px; padding: 0 42px 0 13px; color: #ece9f1; background: rgba(255,255,255,.04); border: 1px solid rgba(252,212,44,.1); border-radius: 11px; font: inherit; font-size: 13.5px; transition: border-color .2s, box-shadow .2s, background .2s; }
 .confis-login-input:-webkit-autofill,
 .confis-login-input:-webkit-autofill:hover,
 .confis-login-input:-webkit-autofill:focus,
-.confis-login-input:autofill { -webkit-text-fill-color: var(--text-primary); -webkit-box-shadow: 0 0 0 1000px var(--login-field-bg) inset; box-shadow: 0 0 0 1000px var(--login-field-bg) inset; }
-.confis-login-input:focus { outline: 2px solid rgba(215, 178, 20, .28); border-color: #d7b214; }
-.confis-login-input-icon { position: absolute; top: 50%; right: 12px; display: flex; align-items: center; justify-content: center; padding: 3px; color: var(--muted); background: transparent; border: 0; border-radius: 6px; transform: translateY(-50%); }
+.confis-login-input:autofill { -webkit-text-fill-color: #ece9f1; -webkit-box-shadow: 0 0 0 1000px #232330 inset; box-shadow: 0 0 0 1000px #232330 inset; }
+.confis-login-input:focus { outline: none; border-color: #fcd42c; background: rgba(252,212,44,.03); box-shadow: 0 0 0 3px rgba(252,212,44,.1); }
+.confis-login-input-icon { position: absolute; top: 50%; right: 12px; display: flex; align-items: center; justify-content: center; padding: 3px; color: #454558; background: transparent; border: 0; border-radius: 6px; transform: translateY(-50%); transition: color .2s; }
 button.confis-login-input-icon { cursor: pointer; }
-.confis-login-input-icon:hover { color: #343941; }
-.confis-login-options { display: flex; min-height: 20px; align-items: center; justify-content: space-between; gap: 10px; margin: -1px 0 7px; }
-.confis-login-remember { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12.5px; font-weight: 500; cursor: pointer; user-select: none; }
-.confis-login-remember input { appearance: none; display: grid; width: 18px; height: 18px; flex: 0 0 18px; place-content: center; margin: 0; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 5px; cursor: pointer; }
-.confis-login-remember input:checked { background: #d7b214; border-color: #d7b214; }
-.confis-login-remember input:checked::after { width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; content: ''; transform: rotate(45deg) translate(-1px, -1px); }
-.confis-login-remember input:focus-visible { outline: 2px solid rgba(215, 178, 20, .35); outline-offset: 2px; }
-.confis-login-link { padding: 0; color: #c9a300; background: transparent; border: 0; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
-.confis-login-link:hover { color: #a98600; text-decoration: underline; }
-.confis-login-notice { margin: -2px 0 7px; color: #656a73; font-size: 11.5px; line-height: 1.5; }
-.confis-login-submit { position: relative; width: 100%; min-height: 42px; justify-content: center; gap: 9px; margin-top: 0; border-radius: 11px; box-shadow: 0 4px 18px rgba(250, 211, 43, .25); }
+.confis-login-input-icon:hover { color: #fcd42c; }
+.confis-login-options { display: flex; min-height: 20px; align-items: center; justify-content: space-between; gap: 10px; margin: -1px 0 5px; }
+.confis-login-remember { display: inline-flex; align-items: center; gap: 8px; color: #6a6a7e; font-size: 12.5px; font-weight: 500; cursor: pointer; user-select: none; }
+.confis-login-remember input { appearance: none; display: grid; width: 16px; height: 16px; flex: 0 0 16px; place-content: center; margin: 0; background: rgba(255,255,255,.04); border: 1px solid rgba(252,212,44,.15); border-radius: 4px; cursor: pointer; }
+.confis-login-remember input:checked { background: #fcd42c; border-color: #fcd42c; }
+.confis-login-remember input:checked::after { width: 4px; height: 8px; border: solid #1c1c24; border-width: 0 2px 2px 0; content: ''; transform: rotate(45deg) translate(-1px,-1px); }
+.confis-login-remember input:focus-visible { outline: 2px solid rgba(252,212,44,.35); outline-offset: 2px; }
+.confis-login-link { padding: 0; color: #fcd42c; background: transparent; border: 0; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.confis-login-link:hover { opacity: .75; text-decoration: underline; }
+.confis-login-notice { margin: -2px 0 5px; color: #6a6a7e; font-size: 11.5px; line-height: 1.5; }
+.confis-login-submit {
+  position: relative; width: 100%; min-height: 44px;
+  justify-content: center; gap: 9px; margin-top: 2px;
+  border-radius: 11px; border: none;
+  background: linear-gradient(90deg, #fcd42c 0%, #f5a000 100%);
+  color: #1c1c24; font-weight: 800;
+  box-shadow: 0 4px 20px rgba(252,212,44,.28);
+  overflow: hidden;
+  transition: transform .18s, box-shadow .18s;
+}
+.confis-login-submit::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent); transform: translateX(-110%); transition: transform .5s; }
+.confis-login-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(252,212,44,.42); }
+.confis-login-submit:hover:not(:disabled)::before { transform: translateX(110%); }
+.confis-login-submit:active:not(:disabled) { transform: none; }
 .confis-login-submit.loading .auth-btn-loader { display: block; }
 .confis-login-submit.loading .auth-btn-lbl, .confis-login-submit.loading .auth-btn-arr { opacity: 0; }
-.confis-login-footer { margin-top: 24px; color: var(--text-secondary); font-size: 12px; line-height: 1.65; text-align: center; }
-.confis-login-footer > span { display: block; margin-top: 6px; color: var(--muted); font-size: 10.5px; }
+.confis-login-footer { margin-top: 20px; color: #6a6a7e; font-size: 12px; line-height: 1.65; text-align: center; position: relative; z-index: 1; }
+.confis-login-footer > span { display: block; margin-top: 5px; color: #454558; font-size: 10.5px; }
 .confis-login-footer .confis-login-link { font-size: inherit; }
-.auth-screen.confis-login-screen .auth-error { margin: 0 0 4px; color: #9a2d2d; }
+.confis-login-screen .auth-error { margin: 0 0 10px; padding: 10px 12px; color: #f2a09d; background: rgba(199,68,68,.12); border: 1px solid rgba(199,68,68,.28); border-radius: 9px; font-size: 12.5px; line-height: 1.5; position: relative; z-index: 1; width: 100%; max-width: 360px; }
 :root[data-theme='Escuro'] .confis-login-logo-light { display: none; }
 :root[data-theme='Escuro'] .confis-login-logo-dark { display: block; }
-:root[data-theme='Escuro'] .auth-card.confis-login-card { box-shadow: 0 14px 42px rgba(0, 0, 0, .32); }
-:root[data-theme='Escuro'] .confis-login-link { color: var(--accent); }
-:root[data-theme='Escuro'] .auth-screen.confis-login-screen .auth-error { color: #f2a09d; }
 
-@media (max-width: 540px) {
-  .auth-screen.confis-login-screen { padding: 20px 16px; }
-  .auth-card.confis-login-card { padding: 32px 24px 22px; }
-  .confis-login-logo { width: min(150px, 72%); margin-bottom: 24px; }
+@media (max-width: 720px) {
+  .confis-login-screen { flex-direction: column; overflow-y: auto; }
+  .confis-brand { flex: 0 0 auto; padding: 2.5rem 1.25rem; justify-content: flex-start; }
+  .confis-brand-content { padding: 0; max-width: 100%; }
+  .confis-brand-desc, .confis-brand-feats { display: none; }
+  .confis-brand-headline { font-size: 1.5rem; margin-bottom: .5rem; }
+  .confis-login-card { flex: 1; padding: 2rem 1.5rem; align-items: flex-start; }
+  .confis-login-card::after { display: none; }
+  .confis-login-formbox { max-width: 100%; }
 }

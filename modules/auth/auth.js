@@ -173,47 +173,75 @@ export function mountAuthAccess({ authRoot, appShell, readerMount, settingsMount
     appShell.hidden = true;
     authRoot.hidden = false;
     authRoot.innerHTML =
-      '<section class="auth-screen confis-login-screen">' +
-        '<article class="auth-card confis-login-card">' +
-          '<img class="confis-login-logo confis-login-logo-light" src="./assets/confis-logo2.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
-          '<img class="confis-login-logo confis-login-logo-dark" src="./assets/confis-logo.png" alt="CONFIS \u2014 Confer\u00eancia Fiscal" />' +
-          '<h1 class="confis-login-title">Acessar o sistema</h1>' +
-          '<p class="confis-login-subtitle">Informe suas credenciais para entrar no CONFIS.</p>' +
-          (error ? '<div class="auth-error" role="alert">' + escapeHtml(error) + '</div>' : '') +
-          '<form id="authLoginForm" class="confis-login-form" novalidate>' +
-            '<label class="confis-login-field">Usu\u00e1rio' +
-              '<span class="confis-login-input-wrap">' +
-                '<input class="confis-login-input" name="username" type="text" value="' + escapeHtml(username) + '" autocomplete="username" spellcheck="false" required />' +
-                '<span class="confis-login-input-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>' +
-              '</span>' +
-            '</label>' +
-            '<label class="confis-login-field">Senha' +
-              '<span class="confis-login-input-wrap">' +
-                '<input class="confis-login-input" name="password" type="password" autocomplete="current-password" id="authPassInput" required />' +
-                '<button type="button" class="confis-login-input-icon" id="authPassToggle" aria-label="Mostrar senha">' +
-                  '<svg id="authEyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
-                  '<svg id="authEyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>' +
-                '</button>' +
-              '</span>' +
-            '</label>' +
-            '<div class="confis-login-options">' +
-              '<label class="confis-login-remember" for="authRemember">' +
-                '<input type="checkbox" id="authRemember"' + (remember ? ' checked' : '') + ' />' +
-                '<span class="confis-login-checkbox" aria-hidden="true"></span>' +
-                '<span>Manter conectado</span>' +
-              '</label>' +
-              '<button class="confis-login-link" type="button" id="authForgotPassword">Esqueci a senha</button>' +
+      '<section class="confis-login-screen">' +
+        '<div class="confis-brand" aria-hidden="true">' +
+          '<div class="confis-brand-pts" id="confisLoginPts"></div>' +
+          '<div class="confis-brand-content">' +
+            '<div class="confis-brand-logo">' +
+              '<img class="confis-login-logo confis-login-logo-light" src="./assets/confis-logo2.png" alt="CONFIS" />' +
+              '<img class="confis-login-logo confis-login-logo-dark" src="./assets/confis-logo.png" alt="CONFIS" />' +
             '</div>' +
-            '<p class="confis-login-notice" id="authLoginNotice" hidden>Para redefinir sua senha, fale com o administrador.</p>' +
-            '<button class="auth-primary-button confis-login-submit" type="submit">' +
-              '<span class="auth-btn-loader" aria-hidden="true"></span>' +
-              '<span class="auth-btn-lbl">Entrar</span>' +
-              '<svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
-            '</button>' +
-          '</form>' +
-          '<footer class="confis-login-footer">Precisa de acesso? <button type="button" class="confis-login-link" id="authContactAdmin">Fale com o administrador</button><span>\u00a9 2026 CONFIS \u00b7 Todos os direitos reservados</span></footer>' +
+            '<p class="confis-brand-headline">Fiscalidade com <em>intelig\u00eancia</em><br>e precis\u00e3o total</p>' +
+            '<p class="confis-brand-desc">Automatize a confer\u00eancia de NF-e, SPED e obriga\u00e7\u00f5es acess\u00f3rias. Reduza erros com visibilidade total.</p>' +
+            '<ul class="confis-brand-feats">' +
+              '<li><span class="confis-feat-dot"></span>Confer\u00eancia autom\u00e1tica de NF-e, SPED e DCTF</li>' +
+              '<li><span class="confis-feat-dot"></span>Alertas em tempo real de diverg\u00eancias</li>' +
+              '<li><span class="confis-feat-dot"></span>Relat\u00f3rios com rastreabilidade completa</li>' +
+            '</ul>' +
+          '</div>' +
+        '</div>' +
+        '<article class="confis-login-card">' +
+          '<div class="confis-login-formbox">' +
+            '<div class="confis-login-formhead">' +
+              '<h1 class="confis-login-title">Bem-vindo</h1>' +
+              '<p class="confis-login-subtitle">Acesse sua conta para continuar</p>' +
+            '</div>' +
+            (error ? '<div class="auth-error" role="alert">' + escapeHtml(error) + '</div>' : '') +
+            '<form id="authLoginForm" class="confis-login-form" novalidate>' +
+              '<label class="confis-login-field">Usu\u00e1rio' +
+                '<span class="confis-login-input-wrap">' +
+                  '<input class="confis-login-input" name="username" type="text" value="' + escapeHtml(username) + '" autocomplete="username" spellcheck="false" required />' +
+                  '<span class="confis-login-input-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>' +
+                '</span>' +
+              '</label>' +
+              '<label class="confis-login-field">Senha' +
+                '<span class="confis-login-input-wrap">' +
+                  '<input class="confis-login-input" name="password" type="password" autocomplete="current-password" id="authPassInput" required />' +
+                  '<button type="button" class="confis-login-input-icon" id="authPassToggle" aria-label="Mostrar senha">' +
+                    '<svg id="authEyeOn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+                    '<svg id="authEyeOff" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>' +
+                  '</button>' +
+                '</span>' +
+              '</label>' +
+              '<div class="confis-login-options">' +
+                '<label class="confis-login-remember" for="authRemember">' +
+                  '<input type="checkbox" id="authRemember"' + (remember ? ' checked' : '') + ' />' +
+                  '<span class="confis-login-checkbox" aria-hidden="true"></span>' +
+                  '<span>Manter conectado</span>' +
+                '</label>' +
+                '<button class="confis-login-link" type="button" id="authForgotPassword">Esqueci a senha</button>' +
+              '</div>' +
+              '<p class="confis-login-notice" id="authLoginNotice" hidden>Para redefinir sua senha, fale com o administrador.</p>' +
+              '<button class="auth-primary-button confis-login-submit" type="submit">' +
+                '<span class="auth-btn-loader" aria-hidden="true"></span>' +
+                '<span class="auth-btn-lbl">Entrar</span>' +
+                '<svg class="auth-btn-arr" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
+              '</button>' +
+            '</form>' +
+            '<footer class="confis-login-footer">Precisa de acesso? <button type="button" class="confis-login-link" id="authContactAdmin">Fale com o administrador</button><span>\u00a9 2026 CONFIS \u00b7 Todos os direitos reservados</span></footer>' +
+          '</div>' +
         '</article>' +
       '</section>';
+    const confisLoginPts = document.getElementById('confisLoginPts');
+    if (confisLoginPts) {
+      for (let i = 0; i < 18; i++) {
+        const p = document.createElement('span');
+        p.className = 'confis-pt';
+        const s = (Math.random() * 2.5 + 1).toFixed(1);
+        p.style.cssText = 'width:' + s + 'px;height:' + s + 'px;left:' + (Math.random() * 100).toFixed(1) + '%;bottom:' + (Math.random() * 12).toFixed(1) + '%;animation-duration:' + (Math.random() * 10 + 9).toFixed(1) + 's;animation-delay:-' + (Math.random() * 18).toFixed(1) + 's';
+        confisLoginPts.appendChild(p);
+      }
+    }
     if (focus) authRoot.querySelector('input[name="username"]')?.focus();
     const passInput = document.getElementById('authPassInput');
     const passToggle = document.getElementById('authPassToggle');
