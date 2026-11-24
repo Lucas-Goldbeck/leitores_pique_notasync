@@ -13,6 +13,8 @@ import { mountAuthAccess } from './modules/auth/auth.js';
 
   function renderTheme() {
     const isDark = root.dataset.theme === 'Escuro';
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = isDark ? '#100f14' : '#fefefe';
     label.textContent = isDark ? 'Tema escuro' : 'Tema claro';
     icon.innerHTML = isDark ? moonIcon : sunIcon;
     toggle.setAttribute('aria-label', isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro');

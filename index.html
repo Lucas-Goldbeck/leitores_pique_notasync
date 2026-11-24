@@ -16,7 +16,9 @@
       (() => {
         try {
           const savedTheme = localStorage.getItem('gcont:theme:v1');
-          document.documentElement.dataset.theme = savedTheme === 'Claro' ? 'Claro' : 'Escuro';
+          const theme = savedTheme === 'Claro' ? 'Claro' : 'Escuro';
+          document.documentElement.dataset.theme = theme;
+          document.querySelector('meta[name="theme-color"]').content = theme === 'Escuro' ? '#100f14' : '#fefefe';
         } catch {
           document.documentElement.dataset.theme = 'Escuro';
         }
